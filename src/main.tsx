@@ -1,4 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { NumbersPage } from './ui/NumbersPage';
+import { App } from './ui/App';
+import './ui/styles.css';
 
-createRoot(document.getElementById('root')!).render(<NumbersPage />);
+createRoot(document.getElementById('root')!).render(<App />);

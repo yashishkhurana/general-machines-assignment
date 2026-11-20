@@ -1,0 +1,31 @@
+{
+  "extracted": "2026-11-20",
+  "osm": {
+    "source": "OSM API 0.6 map call",
+    "bbox": [
+      100.5635,
+      13.7285,
+      100.5775,
+      13.7405
+    ],
+    "buildings": 1754,
+    "withHeight": 18,
+    "withLevels": 70,
+    "withEither": 88,
+    "sharePctHeight": 1,
+    "sharePctLevels": 4,
+    "sharePctEither": 5,
+    "manual": 4,
+    "assumedDefault": 1662,
+    "roads": 488,
+    "perLevelM": 3,
+    "defaultHeightM": 6
+  },
+  "zones": {
+    "source": "Kanesuan/KNS.MAP public/data/bkk-zoning-current.geojson",
+    "inputFeatures": 498,
+    "slivers": 124,
+    "shippedFeatures": 186,
+    "brown": 69
+  }
+}

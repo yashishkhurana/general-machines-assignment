@@ -37,21 +37,40 @@ export function mpArea(mp: MultiPoly): number {
 
 export const toMP = (r: Ring): MultiPoly => [[close(r)]];
 
+// polygon-clipping (0.15) can fail on near-coincident floating-point input ("Unable to find segment",
+// "Unable to complete output ring"). Every boolean snaps its input to a 0.1 mm grid; on failure it retries
+// on a 1 mm grid, then with the second operand nudged by a fraction of a millimetre.
+const snap = (g: MultiPoly, q: number): MultiPoly => g.map((poly) => poly.map((ring) => ring.map((p) => [Math.round(p[0] / q) * q, Math.round(p[1] / q) * q] as Pt)));
+const nudge = (g: MultiPoly, d: number): MultiPoly => g.map((poly) => poly.map((ring) => ring.map((p) => [p[0] + d, p[1] + d * 0.7] as Pt)));
+export let booleanRetries = 0;
+function safe(op: 'union' | 'difference' | 'intersection', a: MultiPoly, bs: MultiPoly[]): MultiPoly {
+  const tries: [number, number][] = [[1e-4, 0], [1e-3, 0], [1e-3, 3e-4], [1e-2, 2.1e-3]];
+  let last: unknown;
+  for (const [q, d] of tries) {
+    try {
+      const A = snap(a, q);
+      const B = bs.map((b, i) => snap(d ? nudge(b, d * (i + 1)) : b, q));
+      return (pc as any)[op](A, ...B) as MultiPoly;
+    } catch (e) { last = e; booleanRetries++; }
+  }
+  throw last;
+}
+
 export function union(...gs: MultiPoly[]): MultiPoly {
   const xs = gs.filter((g) => g.length);
   if (!xs.length) return [];
   if (xs.length === 1) return xs[0];
-  return pc.union(xs[0] as any, ...(xs.slice(1) as any)) as MultiPoly;
+  return safe('union', xs[0], xs.slice(1));
 }
 export function difference(a: MultiPoly, ...bs: MultiPoly[]): MultiPoly {
   const xs = bs.filter((g) => g.length);
   if (!a.length) return [];
   if (!xs.length) return a;
-  return pc.difference(a as any, ...(xs as any)) as MultiPoly;
+  return safe('difference', a, xs);
 }
 export function intersection(a: MultiPoly, b: MultiPoly): MultiPoly {
   if (!a.length || !b.length) return [];
-  return pc.intersection(a as any, b as any) as MultiPoly;
+  return safe('intersection', a, [b]);
 }
 
 /** Minkowski buffer of segment a-b by radius r: a rectangle plus round caps, as one polygon. */
@@ -119,7 +138,7 @@ export function stripsUnion(segs: { a: Pt; b: Pt; r: number }[]): MultiPoly {
   for (const d of discs.values()) parts.push(disc(d.c, d.r, 0.0137 * i++));
   // union incrementally: a long single n-ary union is where polygon-clipping is least robust
   let acc: MultiPoly = [];
-  for (const p of parts) acc = acc.length ? (pc.union(acc as any, p as any) as MultiPoly) : p;
+  for (const p of parts) acc = acc.length ? union(acc, p) : p;
   return acc;
 }
 
