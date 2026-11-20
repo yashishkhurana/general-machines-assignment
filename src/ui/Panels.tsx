@@ -51,7 +51,7 @@ export function ToolHint({ tool, measure }: { tool: Tool; measure: number | null
   const t: Record<Tool, string> = {
     edit: 'Drag corners to edit the plot; drag the small midpoints to add a corner.',
     draw: 'Click each corner of the plot. Click the first corner to close it.',
-    pickRoad: 'Click a plot edge to mark it as facing a road (click again to unmark).',
+    pickRoad: 'Click a plot edge to mark it as facing a road (click again to unmark). Easier with the map flat: right-drag or use the compass to reset tilt.',
     measure: measure !== null ? `Measured ${n1(measure)} m. Click again to start a new measurement.` : 'Click one road boundary, then the other (turn on the satellite layer first).',
   };
   return <div className="hint" role="status">{t[tool]}</div>;

@@ -1,6 +1,6 @@
 // Two concept generators. Both add floors until the first limit binds: permitted floor area, the class cap,
 // the height plane, open space, or parking. Parking counts toward floor area.
-import { clean, intersection, mpArea, mpPerimeter, offsetRight, pointSegDist, stripsUnion, union, difference, segmentBuffer, type MultiPoly, type Pt } from './geom';
+import { clean, intersection, mpArea, mpBounds, mpPerimeter, offsetRight, stripsUnion, union, difference, segmentBuffer, type MultiPoly, type Pt } from './geom';
 import { classify, type Availability, type BuildingClass } from './classify';
 import { underPlane } from './envelope';
 import { highRiseFootprint, lowRiseFootprint, type Footprint } from './footprint';
@@ -56,14 +56,13 @@ function nearRoad(site: Site, base: MultiPoly, t: number): MultiPoly {
   return clean(intersection(base, cutter), 0.5);
 }
 
+/** Upper bound for the trim depth: the footprint's bounding-box diagonal (any point is within it of a road
+ *  line that touches the plot). A per-vertex nearest-road distance fails when roads are on opposite sides. */
 function maxDepth(site: Site, base: MultiPoly) {
-  let m = 0;
-  for (const poly of base) for (const p of poly[0]) {
-    let d = Infinity;
-    for (const r of site.roads) d = Math.min(d, pointSegDist(p, r.nearA, r.nearB));
-    m = Math.max(m, d);
-  }
-  return m + 1;
+  const [x0, y0, x1, y1] = mpBounds(base);
+  let d = Math.hypot(x1 - x0, y1 - y0);
+  for (const r of site.roads) for (const p of [r.nearA, r.nearB]) d = Math.max(d, Math.hypot(p[0] - (x0 + x1) / 2, p[1] - (y0 + y1) / 2) * 2);
+  return d + 1;
 }
 
 /** Trim a footprint from the rear until its area is at most `target` (binary search on depth from the road). */

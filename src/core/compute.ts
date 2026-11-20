@@ -30,14 +30,14 @@ export function compute(input: SiteInput): Results {
   try {
     messages.push(...validatePlot(input.plot));
     if (messages.some((m) => m.level === 'error')) return empty(messages);
-    messages.push(...validateRoads(input.plot, input.roads));
-    messages.push(...validateSettings(input.settings));
-    if (messages.some((m) => m.level === 'error')) return empty(messages);
-
-    const site = buildSite(input.plot, input.roads);
-    if (site.netArea < 1) return empty([...messages, { level: 'error', code: 'stripAll', text: 'The road widening strip takes the whole plot.' }], site);
-
+    const roadMsgs = validateRoads(input.plot, input.roads);
+    messages.push(...roadMsgs, ...validateSettings(input.settings));
+    const roadsOk = !roadMsgs.some((m) => m.level === 'error');
+    const site = buildSite(input.plot, roadsOk ? input.roads : []);
+    // the zone is looked up even when the inputs aren't complete yet, so the panel can show it
     const zone = resolveZone(site, input.zones, input.zoneOverride);
+    if (messages.some((m) => m.level === 'error')) return empty([...messages, ...zone.messages.filter((m) => m.level !== 'error')], site, zone);
+    if (site.netArea < 1) return empty([...messages, { level: 'error', code: 'stripAll', text: 'The road widening strip takes the whole plot.' }], site, zone);
     messages.push(...zone.messages);
     if (!zone.supported.length) return empty(messages, site, zone);
 

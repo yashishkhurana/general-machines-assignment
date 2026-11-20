@@ -260,3 +260,12 @@ describe('drawing direction', () => {
     expect(a.footprints!.highRise.area).toBeCloseTo(1064, 1);
   });
 });
+
+describe('break cases found while testing', () => {
+  it('roads on opposite sides: low-rise plate trims from both and still fits (was 75 m²)', () => {
+    const r = compute(input({ roads: [{ edge: 0, width: 16, current: 16 }, { edge: 2, width: 10, current: 10 }] }));
+    const b = r.concepts.find((c) => c.concept.id === 'B')!.concept;
+    expect(b.ok).toBe(true);
+    expect(mpArea(b.openSpace.groundPlate)).toBeCloseTo(1400, 0);
+  });
+});

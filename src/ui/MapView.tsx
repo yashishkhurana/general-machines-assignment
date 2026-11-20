@@ -45,7 +45,7 @@ export interface MapProps {
   rays: { a: Pt; b: Pt; gap: number }[];
   measure: LL[];
   demolished: Set<number>;
-  onRing: (ring: LL[], final: boolean) => void;
+  onRing: (ring: LL[], final: boolean, isNew?: boolean) => void;
   onPickEdge: (edge: number) => void;
   onMeasure: (pts: LL[]) => void;
   onToolDone: () => void;
@@ -130,6 +130,7 @@ export function MapView(p: MapProps) {
         });
         draw.start();
         drawRef.current = draw;
+        (window as any).__draw = draw;
         let raf = 0;
         const readRing = (): LL[] | null => {
           if (plotId.current === null) return null;
@@ -152,7 +153,7 @@ export function MapView(p: MapProps) {
             plotId.current = id;
             if (old !== null && old !== id) { suppress.current = true; try { draw.removeFeatures([old]); } catch { /* gone */ } suppress.current = false; }
             const r = readRing();
-            if (r) props.current.onRing(r, true);
+            if (r) props.current.onRing(r, true, true);
             props.current.onToolDone();
             return;
           }
@@ -200,7 +201,7 @@ export function MapView(p: MapProps) {
       if (plotId.current !== null && cur) draw.removeFeatures([plotId.current]);
       plotId.current = null;
       if (ring.length >= 3) {
-        const id = `plot-${Date.now()}`;
+        const id = crypto.randomUUID();
         const res = draw.addFeatures([{ id, type: 'Feature', properties: { mode: 'polygon' }, geometry: { type: 'Polygon', coordinates: [[...ring, ring[0]]] } } as any]);
         if (res[0]?.valid !== false) plotId.current = id;
       }

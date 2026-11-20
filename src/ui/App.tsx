@@ -54,8 +54,9 @@ export function App() {
     return () => clearTimeout(t);
   }, [state]);
 
-  const onRing = useCallback((ring: LL[], _final: boolean) => {
-    setState((s) => ({ ...s, ring, roads: remapRoads(ringRef.current, ring, s.roads) }));
+  const onRing = useCallback((ring: LL[], _final: boolean, isNew?: boolean) => {
+    if (isNew) { setMeasure([]); setTool('pickRoad'); }
+    setState((s) => ({ ...s, ring, roads: isNew ? [] : remapRoads(ringRef.current, ring, s.roads) }));
   }, []);
   const onPickEdge = useCallback((edge: number) => {
     setState((s) => {
@@ -101,7 +102,7 @@ export function App() {
       </aside>
       <main className="center">
         <MapView state={state} results={results} frame={frame} tool={tool} rays={state.view.rays ? rays : []} measure={measure} demolished={demolished}
-          onRing={onRing} onPickEdge={onPickEdge} onMeasure={setMeasure} onToolDone={() => setTool('edit')} fitKey={fitKey} />
+          onRing={onRing} onPickEdge={onPickEdge} onMeasure={setMeasure} onToolDone={() => setTool((t) => (t === 'draw' ? 'edit' : t))} fitKey={fitKey} />
         <ToolHint tool={tool} measure={measured} />
         <Legend view={state.view} />
       </main>
