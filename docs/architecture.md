@@ -15,9 +15,16 @@
 >
 > **The five that change the build:**
 > 1. **[gap] Parking count is missing.** Reg. 7 cl. 3(1)(C)/(H) sets it, and the parking counts toward floor area. On the test fixture that's 134+ spaces, roughly 4,000 m² of the 16,000 m².
-> 2. **[unverified] "Ordinance" clauses (cl. 49, 50, 52, 54, 55) have not been read.** The low-rise 30%-of-plot open-space rule, and test rows that depend on it, rest on cl. 52 alone.
+> 2. **[verified, update] Ordinance B.E. 2544 now read** (ASA copy, `download.asa.or.th/03media/04law/cba/bb/bb44-03.pdf`).
+>    - Cl. 52(1) confirms 30% of *land* open for residential, so the 1,400 m² plate stands.
+>    - Cl. 55 adds ≥ 2 m clear all round any building over 15 m, **including the road side**. That changes the low-rise front setback on a 16 m road from 1.6 m to **2 m**.
+>    - Cl. 53 adds a frontage rule (see the §4.3 review).
 > 3. **[wrong] OSM heights won't carry "real site".** Around Soi 39, 2.2% of 4,702 buildings have `height` and 7.6% have `building:levels`. With a 6 m default, about 90% of the towers would render as 2-storey boxes.
-> 4. **[unverified] The 16 m default for Soi 39 has no source yet.** No "16.00–29.99 m group" or Soi 39 entry appears in the gazette text. OSM tags it `tertiary`, `lanes=2`, no width.
+> 4. **[verified, update] The 16 m for Soi 39 is in the law.** The full gazette (`mr56-bma-full.pdf`, 287 pp) has it in two places:
+>    - It lists Soi 39 in road group 13, "16.00–29.99 m".
+>    - It names it road **ข 38**, an existing road to be widened to a 16 m right-of-way (art. 44(2)).
+>
+>    Art. 36 ¶2 makes that planned 16 m line the road boundary for building lines and distances. My earlier "[unverified]" flag was wrong: I had read only the 46-page text, not the annexes.
 > 5. **[gap] "No zoning map shipped" makes two parts of the plan impossible:**
 >    - the "plot straddling two zones" validation in §6
 >    - catching a plot drawn outside ย.10
@@ -50,11 +57,14 @@ Stated limits, shown in the tool:
 >
 >   The condo rules (no size cap) and the FAR/OSR structure are the same across all three. Reword so the claim isn't broader than the condo-only scope.
 > - **Sub-zone "ย.10-4" [unverified].** The zone ย.10 is confirmed: every sample on Soi 39 and plots 40 m either side fall in one ย.10 polygon (feature 457, 285 ha), about 320 m from its edge. The extract carries no sub-area numbers, so "-4" can't be confirmed. Drop it or cite the official map sheet.
-> - **Road width 16 m [unverified].**
->   - The gazette text has no road-width grouping and no Soi 39 entry. Road lists sit in annexes (รายการประกอบแผนผัง) that aren't in the 46-page text.
->   - The "16.00–29.99 m" banding looks like the 2567 draft plan's road list. If so, it's the wrong source under the 2556 law.
->   - OSM has `highway=tertiary`, `lanes=2`, no `width`.
->   - Keep the input editable, label the default "assumed", and record where 16 m came from.
+> - **Road width 16 m [verified; corrects an earlier flag].**
+>   - The full gazette annex lists Soi 39 in group 13, "รายชื่อถนนสาธารณะที่มีขนาดเขตทางกว้างตั้งแต่ ๑๖.๐๐ เมตร ถึง ๒๙.๙๙ เมตร" (item 13, p. 125 of the annex).
+>   - It also defines it as **ถนนสาย ข ๓๘**, "ถนนเดิมกำหนดให้ขยายเขตทาง", widened along about 2,000 m from Khlong Saen Saep to Sukhumvit. ข roads have a 16 m right-of-way (art. 44(2)).
+>   - **Consequence (new):** under art. 36 ¶2, the planned ROW line of a ข road counts as the public road boundary for building lines and distances under building-control law. Art. 45 limits land inside that line to transport and public use.
+>   - If the soi's current ROW is narrower than 16 m, the widening strip comes out of the plot. Setbacks and the height plane are then measured from the widened line, not the current kerb.
+>   - The tool needs a "current ROW width" input next to the 16 m planned width, and must draw the widening strip.
+>   - Assumption to log: the widening is symmetric about the centreline, since the plan doesn't say. Whether the strip still counts as plot area for FAR is not stated; the cautious reading excludes it.
+>   - OSM has `highway=tertiary`, `lanes=2`, no `width`, so the current width stays a user input.
 > - **Soi 39 is within 500 m of BTS Phrom Phong** for most of its length (art. 37: measured from the platform edge). That doesn't change anything for condos in ย.10, but would matter for hotel/office if those are added.
 > - **Bonus clauses 53/54 excluded [verified].** Both are limited to อาคารสาธารณะ (public building). Reg. 55's definition lists hotels but not apartments or condos, so a condo isn't a public building. This closes open item 4 in §10.
 > - **Zone as user input [gap].** The user draws a plot on a real map, then types a zone the tool can't check. Options:
@@ -174,7 +184,13 @@ Footprint method: buildable footprint = plot minus the union of buffers of each 
 > **▸ Review, §4.3**
 > - **Reg. 33 cl. 3–4 and Reg. 55 cl. 41 and cl. 50 [verified]** against the translation, including the tier boundaries (cl. 41: "10 m and upwards but not exceeding 20 m", then "not less than 20 m"; both give 2 m at exactly 20 m).
 > - **High-rise front setback should be computed as max(6 m, the cl. 41 value)** rather than hard-coded to 6. It's always 6 today, because high-rise needs a road of 10 m or more and then W/10 ≤ 2. The max() keeps the code correct if the rules table changes.
-> - **Every "Ordinance cl. N" citation is unverified.** None of the Bangkok Building Control Ordinance B.E. 2544 has been read in this project. Either get the text and check each clause, or drop the citations and rely on Reg. 55, which is verified.
+> - **Ordinance B.E. 2544 [verified, read 20 Nov].**
+>   - **Cl. 50** repeats Reg. 55 cl. 41's tiers. It exempts residential buildings of ≤ 3 storeys or ≤ 10 m and ≤ 1,000 m², which don't apply here.
+>   - **Cl. 54** sets openings 2 m from the boundary up to 2 storeys or 9 m, and 3 m from the 3rd storey or above 9 m. That's measured by storeys *or* height, slightly stricter than Reg. 55 cl. 50.
+>   - **Cl. 55** (new for the tool): ≥ 1 m clear all round a building up to 15 m, and ≥ 2 m above 15 m. It can't be shared with another building's open space. Low-rise front setback = **max(cl. 50 value, 2 m)**, which is 2 m on a 16 m road.
+>   - **Cl. 53** (new): a building on a public way must have its road-side face longer than 1/8 of the building's outer perimeter, and that face must sit within 20 m of the road. Add it to both concepts' checklists.
+>   - **Cl. 52(6)** (6/12 m front open space) applies only to buildings *not* on a public way, so it doesn't apply here.
+>   - **Cl. 49** = Reg. 55 cl. 44. It adds an exception: within 100 m of a road ≥ 80 m wide, measure from the widest road. Not relevant to Soi 39.
 > - **Canal edges are missing [gap].** Reg. 55 cl. 42 requires a building-line setback from a canal of 3 m (canal under 10 m wide) or 6 m (10 m or wider). Plan art. 40(2) adds a planted strip of the same widths. Sukhumvit has khlongs, so add an edge type "canal" or list it as a stated limit.
 
 ### 4.4 Height
@@ -213,10 +229,7 @@ Required open space is the largest of:
 
 > **▸ Review, §4.5**
 > - **Plan OSR values and Reg. 33 cl. 6 (30% of plot) [verified].** Reg. 55 cl. 33 (30% of the *largest floor*) [verified].
-> - **The ordinance row (30% of plot, all residential) [unverified]** and it carries a lot of weight.
->   - For low-rise, the difference between 30% of plot and 30% of the largest floor is what sets the 1,400 m² plate in §8.
->   - If cl. 52 doesn't say this, the low-rise plate rises to the full 1,543.6 m² setback footprint.
->   - Verify it before locking the tests.
+> - **The ordinance row (30% of plot, residential) [verified].** Cl. 52(1): "อาคารอยู่อาศัย ต้องมีที่ว่างไม่น้อยกว่า 30 ใน 100 ส่วนของพื้นที่ที่ดิน". The 1,400 m² low-rise plate stands.
 > - **There are three readings of the "50% planted" clause.** The text reads "ไม่น้อยกว่าร้อยละห้าสิบของพื้นที่ว่าง" (not less than 50% of the open space):
 >   - (a) 50% of the plan's required open space: the narrowest, 196 m² in §8
 >   - (b) 50% of the governing requirement: the plan's current choice, 300 m²
@@ -364,8 +377,10 @@ Written and passing before any 3D work. Fixture: a 40 × 50 m rectangle, 40 m si
 > - low-rise footprint 34 × 45.4 = 1,543.6 m²; plate 0.7 × 2,000 = 1,400 m²
 > - totals 9,800, 11,200 and 9,800 m²; planted 300 m² against 196 m²
 >
-> **The tests rest on things that aren't verified:**
-> - The 1,400 m² plate depends on ordinance cl. 52 (§4.5 review).
+> **Test values to change or confirm:**
+> - Ordinance cl. 52 is now verified, so the 1,400 m² plate stays.
+> - Ordinance cl. 55 changes the low-rise front setback on a 16 m road to 2 m. The low-rise footprint row becomes 34 × 45 = **1,530 m²**, not 1,543.6 m².
+> - Add a fixture for the ข-road widening: a plot on a road whose current ROW is 10 m, planned 16 m. The plot loses a 3 m strip along the road edge, and the setbacks start from the new line.
 > - Both concepts change once parking is counted (§5 review).
 > - Add the parking count to the fixture: 16,000 m² needs 134 spaces at 1 per 120 m², rounded up.
 >
@@ -403,6 +418,7 @@ Push to `main` as each step works so the live link always shows a working versio
 > - **Open item 4 (condo as public building): closed.** It isn't one (see §1 review).
 > - **New items:**
 >   - parking: Reg. 41 stall and aisle sizes
->   - Ordinance B.E. 2544 text
->   - source for the 16 m width of Soi 39
 >   - zone layer: ship it or not
+>   - the current ROW width of Soi 39, which isn't in OSM or the plan
+>   - whether land inside the ข 38 widening strip counts toward plot area for FAR
+> - **Closed since the first review:** Ordinance B.E. 2544 text (read), and the source for the 16 m Soi 39 width (gazette annex plus road ข 38).

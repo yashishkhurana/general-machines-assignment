@@ -99,3 +99,26 @@ Other uses in ย.8–ย.10 are gated by road width (e.g. ย.8 hotel >50 rooms
 - What counts toward FAR "total floor area" under the 2556 plan (parking? basement?) — check the gazette definitions and BMA practice.
 - Special height-control areas (airport approach zones, Rattanakosin) — not relevant to Sukhumvit ย.10, but confirm.
 - Exact OSR values for ย.1, ย.3–ย.5 (only needed if the tool goes beyond one zone).
+
+## 8. Update (session 1, later): two open questions closed
+
+**Bangkok Building Control Ordinance B.E. 2544** — ASA copy https://download.asa.or.th/03media/04law/cba/bb/bb44-03.pdf (34 pp, text layer; some Thai vowel marks drop in extraction).
+
+| Clause | What it says | Effect |
+|---|---|---|
+| 49 | Same as Reg. 55 cl. 44. Exception: within 100 m of a road ≥ 80 m wide, measure from the widest road | none for Soi 39 |
+| 50 | Same tiers as Reg. 55 cl. 41. Exempts residential ≤ 3 storeys / ≤ 10 m and ≤ 1,000 m² | none |
+| 52(1) | Residential: open space ≥ 30% of **land** area | confirms the low-rise 1,400 m² plate |
+| 52(6) | Buildings > 2 storeys / 8 m **not** on a public way: 6 m front open space (12 m if > 3 storeys) | not for a road-fronting plot |
+| 53 | Building on a public way: road-side face > 1/8 of the outer perimeter, within 20 m of the road | new checklist line |
+| 54 | Openings 2 m from boundary (≤ 2 storeys or ≤ 9 m), 3 m (3rd storey up or > 9 m) | matches Reg. 55 cl. 50 |
+| 55 | ≥ 1 m clear all round a building ≤ 15 m, ≥ 2 m if > 15 m; can't be shared | low-rise front setback on a 16 m road becomes 2 m, not 1.6 m |
+
+**Soi 39 road width** — full plan gazette https://download.asa.or.th/03media/04law/cpa/mr56-bma-full.pdf (287 pp; the 46-page `mr56-bma.pdf` omits the annexes).
+- Annex road list 13, "16.00–29.99 m", item (13): ซอยสุขุมวิท ๓๙ (ซอยพร้อมพงษ์), from Sukhumvit Rd to Phetchaburi Rd.
+- Transport annex: **ถนนสาย ข ๓๘**, an existing road designated for widening, about 2,000 m from Khlong Saen Saep to Sukhumvit Rd. Art. 44(2): ข roads = **16 m right-of-way**.
+- Art. 36 ¶2: for ก and ข widened roads, the **planned ROW line is the road boundary** for building lines and distances under building-control law.
+- Art. 45: land inside a project road's ROW may be used only for transport or public purposes.
+- Still unknown: the soi's current ROW width, and whether the widening strip counts toward plot area for FAR.
+
+**Correction to my earlier review:** I flagged the 16 m figure as unsourced because the 46-page text has no road lists. It was right; the annex has them.
