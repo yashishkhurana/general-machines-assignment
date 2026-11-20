@@ -167,7 +167,9 @@ export function MapView(p: MapProps) {
         map.once('idle', collapse);
 
         const draw = new TerraDraw({
-          adapter: new TerraDrawMapLibreGLAdapter({ map }),
+          // a real click moves the mouse a few pixels; terra-draw's default treats 1 px before the first corner as a
+          // map drag, which silently drops the click, so allow some slack before a press counts as a drag
+          adapter: new TerraDrawMapLibreGLAdapter({ map, minPixelDragDistance: 8, minPixelDragDistanceDrawing: 8, minPixelDragDistanceSelecting: 4 } as any),
           modes: [
             new TerraDrawPolygonMode({ styles: { fillColor: '#2f6fdf', fillOpacity: 0.15, outlineColor: '#2f6fdf', outlineWidth: 2 } } as any),
             new TerraDrawSelectMode({
