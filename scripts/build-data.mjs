@@ -78,13 +78,23 @@ for (const m of xml.matchAll(/<way id="(\d+)"[^>]*>([\s\S]*?)<\/way>/g)) {
   ways.push({ id: +m[1], refs, tags, coords: refs.map((r) => round(nodes.get(r))) });
 }
 
-// Hand-set heights from public listings, for tall buildings near the site with no height or levels tag.
-// Floors × 3.0 m, the same rule as the levels tag. Sources checked 20 Nov 2026.
+// Hand-set heights, for buildings near the site that OSM has no height for. `kind` is the legend tag:
+//   listing - floor count stated in a source (listing, project page); visual - estimated by eye from imagery.
+// Floors × 3.0 m, the same rule as the levels tag. A hand-set entry overrides an OSM tag only if `override`.
+// Sources checked 20 Nov 2026.
 const MANUAL = {
-  253415212: { floors: 20, name: 'Adelphi Grande (Sukhumvit Soi 41)', src: 'oyster.com/bangkok/hotels/adelphi-grande-sukhumvit-by-compass-hospitality; hotels.com' },
-  324280545: { floors: 27, name: 'CNC Residence (Sukhumvit Soi 33)', src: 'fazwaz.com, nestopa.com, hipflat.co.th project pages' },
-  331962399: { floors: 8, name: 'The Bless Hotel & Residence (Sukhumvit Soi 33)', src: 'hotels.com, expedia.co.th, nestopa.com (tallest wing)' },
-  176153885: { floors: 5, name: 'Fuji Supermarket (Soi 33/1)', src: 'thailand.tripcanvas.co guide (low confidence)' },
+  253415212: { floors: 20, kind: 'listing', name: 'Adelphi Grande (Sukhumvit Soi 41)', src: 'oyster.com/bangkok/hotels/adelphi-grande-sukhumvit-by-compass-hospitality; hotels.com' },
+  324280545: { floors: 27, kind: 'listing', name: 'CNC Residence (Sukhumvit Soi 33)', src: 'fazwaz.com, nestopa.com, hipflat.co.th project pages' },
+  331962399: { floors: 8, kind: 'listing', name: 'The Bless Hotel & Residence (Sukhumvit Soi 33)', src: 'hotels.com, expedia.co.th, nestopa.com (tallest wing)' },
+  176153885: { floors: 5, kind: 'listing', name: 'Fuji Supermarket (Soi 33/1)', src: 'thailand.tripcanvas.co guide (low confidence)' },
+  208691131: { floors: 22, kind: 'listing', name: 'PSI Tower', src: "sourced: contractor's project page" },
+  324280507: { floors: 30, kind: 'listing', name: 'D.S. Tower II', src: 'sourced: property listing' },
+  324280512: { floors: 9, kind: 'listing', name: '39 Suites', src: 'sourced: property listing' },
+  // The Manor (340477772): visual estimate pending, level count not yet given. Stays assumed.
+};
+// Kept at the OSM tag on purpose, with the disagreeing source noted.
+const NOTES = {
+  1230362479: 'OSM building:levels=36 kept; CondoDee lists 38 floors',
 };
 const PER_LEVEL = 3.0, DEFAULT_H = 6.0;
 const num = (s) => { const v = parseFloat(String(s).replace(',', '.')); return Number.isFinite(v) && v > 0 ? v : null; };
@@ -97,14 +107,16 @@ for (const w of ways) {
   if (t.building && w.refs.length >= 4 && w.refs[0] === w.refs[w.refs.length - 1]) {
     nB++;
     let h = null, src = 'assumed';
-    if (num(t.height)) { h = num(t.height); src = 'height'; nH++; }
+    const man = MANUAL[w.id];
+    if (man && (man.override || !(num(t.height) || num(t['building:levels'])))) { h = man.floors * PER_LEVEL; src = man.kind; nM++; }
+    else if (num(t.height)) { h = num(t.height); src = 'height'; nH++; }
     else if (num(t['building:levels'])) { h = num(t['building:levels']) * PER_LEVEL; src = 'levels'; nL++; }
-    else if (MANUAL[w.id]) { h = MANUAL[w.id].floors * PER_LEVEL; src = 'manual'; nM++; }
     else h = DEFAULT_H;
     const p = { id: w.id, h: Math.round(h * 10) / 10, src };
     if (t.name) p.name = t.name;
     if (t['building:levels']) p.levels = t['building:levels'];
-    if (src === 'manual') p.manual = MANUAL[w.id].src;
+    if (src === 'listing' || src === 'visual') { p.floors = MANUAL[w.id].floors; p.manual = MANUAL[w.id].src; }
+    if (NOTES[w.id]) p.note = NOTES[w.id];
     buildings.push({ type: 'Feature', properties: p, geometry: { type: 'Polygon', coordinates: [w.coords] } });
   } else if (t.highway && !HW_SKIP.has(t.highway)) {
     const p = { id: w.id, highway: t.highway };

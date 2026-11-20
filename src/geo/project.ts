@@ -1,10 +1,8 @@
-// Lon/lat <-> local metres. UTM zone 47N (EPSG:32647) via proj4, shifted to a local origin so the
-// polygon booleans work on small numbers.
+// Lon/lat <-> local metres. A transverse Mercator centred on the plot with scale factor 1 there, so areas
+// and lengths at the plot are true. (UTM zone 47N, the plan's first choice, has a scale factor of about
+// 0.99995 at Phrom Phong: a 40 × 50 m parcel came out as 1,999.8 m² and the floor area by ~1 m² short.)
 import proj4 from 'proj4';
 import type { Pt } from '../core/geom';
-
-const UTM47N = '+proj=utm +zone=47 +datum=WGS84 +units=m +no_defs';
-const fwd = proj4('EPSG:4326', UTM47N);
 
 export interface Frame {
   origin: [number, number]; // lon, lat
@@ -13,14 +11,11 @@ export interface Frame {
 }
 
 export function makeFrame(origin: [number, number]): Frame {
-  const [ox, oy] = fwd.forward(origin);
+  const tm = proj4('EPSG:4326', `+proj=tmerc +lat_0=${origin[1]} +lon_0=${origin[0]} +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs`);
   return {
     origin,
-    toM: (ll) => {
-      const [x, y] = fwd.forward(ll);
-      return [x - ox, y - oy];
-    },
-    toLL: (p) => fwd.inverse([p[0] + ox, p[1] + oy]) as [number, number],
+    toM: (ll) => tm.forward(ll) as Pt,
+    toLL: (p) => tm.inverse(p) as [number, number],
   };
 }
 

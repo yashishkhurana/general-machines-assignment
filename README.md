@@ -41,7 +41,7 @@ Every input is kept in the URL, so **Share link** passes a case on.
 | `src/core/concepts.ts` | The two generators |
 | `src/core/checklist.ts` | Pass/fail lines |
 | `src/core/compute.ts` | `compute(inputs) → results`, the one call the UI makes |
-| `src/geo/` | Projection (UTM 47N), static data, zone lookup, road-width estimates, the example parcel |
+| `src/geo/` | Projection (transverse Mercator centred on the plot, true scale), static data, zone lookup, road-width estimates, the example parcel |
 | `src/ui/` | MapLibre map, terra-draw editing, three.js envelope layer, panels |
 | `docs/` | Architecture plan with review notes, research notes, decisions log |
 
@@ -64,11 +64,12 @@ node scripts/build-data.mjs <bkk-zoning-current.geojson> <osm-map.xml> src/data
 
 - Rules: Royal Gazette text of the Bangkok Comprehensive Plan B.E. 2556 (vol. 130 part 41 ก, 16 May 2013)
   and the Bangkok Building Control Ordinance B.E. 2544 (ASA copies). Ministerial Regulations 7, 33, 41
-  and 55 via the IIBH English translation. See `docs/research-notes.md`.
+  and 55 via the IIBH English translation. Every clause was read through these third-party copies, none on the
+  Royal Gazette site; see `docs/decisions.md` (top) and `docs/research-notes.md`.
 - Zone polygons: extraction by **Kanesuan/KNS.MAP** (`public/data/bkk-zoning-current.geojson`) of the 2556
   plan map. Approximate boundaries (simplified extract of the 2556 plan map): verify against BMA.
 - Buildings and roads: © OpenStreetMap contributors (ODbL), extract of 20 Nov 2026. Four building heights
-  set by hand from public listings (`docs/decisions.md` D3).
+  hand-set (sourced listing or visual estimate; `docs/decisions.md` D3–D4).
 - Basemap: OpenFreeMap. Satellite: Esri World Imagery (Esri, Maxar, Earthstar Geographics, and the GIS
   User Community). No API keys.
 

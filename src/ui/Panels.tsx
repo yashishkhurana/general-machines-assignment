@@ -57,6 +57,24 @@ export function ToolHint({ tool, measure }: { tool: Tool; measure: number | null
   return <div className="hint" role="status">{t[tool]}</div>;
 }
 
+/** Next to the current-width input: what the estimate rests on, its spread, and how close it sits to a
+ *  Reg. 33 cl. 2 access threshold (10 m for high-rise / extra-large, 18 m above 30,000 m²). */
+function SensitivityNote({ current, est }: { current: number; est: FrontageEstimate | null }) {
+  if (!Number.isFinite(current)) return null;
+  const gap = est?.gap;
+  const lo = est?.lane.value ?? null;
+  const parts: string[] = [];
+  if (gap?.value != null) {
+    parts.push(`The building-gap bound rests on ${gap.rays} of ${gap.total} rays across the frontage${lo != null && gap.median != null ? `; estimates range ${n1(lo)}–${n1(gap.median)} m (lanes lower bound to median gap)` : ''}.`);
+  }
+  const near = [rule('access.road'), rule('access.road.big')].map((t) => ({ t, d: current - t })).filter((x) => Math.abs(x.d) < 3);
+  for (const { t, d } of near) {
+    parts.push(`${n1(current)} m is ${n1(Math.abs(d))} m ${d >= 0 ? 'above' : 'below'} the ${t} m access threshold (Reg. 33 cl. 2)${t === rule('access.road') ? ', which decides whether a high-rise is allowed at all' : ', above which floor area is capped at 30,000 m²'}: the result is sensitive to this value.`);
+  }
+  if (!parts.length) return null;
+  return <p className={`sens${near.length ? ' warn' : ''}`} role="note">{parts.join(' ')}</p>;
+}
+
 export function InputsPanel(p: {
   state: AppState; results: Results; estimates: (FrontageEstimate | null)[]; measured: number | null;
   setRoads: (r: RoadEdgeInput[]) => void; setSettings: (s: Settings) => void; setZone: (z: Zone | null) => void; setView: (v: Partial<ViewState>) => void;
@@ -100,6 +118,7 @@ export function InputsPanel(p: {
                 <Num id={`w${i}`} label="Planned / legal ROW" unit="m" value={r.width} onChange={(v) => upd({ width: v })} />
                 <Num id={`c${i}`} label="Current ROW" unit="m" value={r.current} onChange={(v) => upd({ current: v })} />
               </div>
+              <SensitivityNote current={r.current} est={est} />
               <table className="est">
                 <thead><tr><th>Current-width estimate</th><th>m</th><th /></tr></thead>
                 <tbody>
@@ -180,8 +199,10 @@ export function Legend({ view }: { view: ViewState }) {
       <span>{sw(COLORS.residential)}Concept: residential</span>
       <span>{sw(COLORS.parking)}Concept: parking</span>
       <span>{sw(COLORS.fire, 0.6)}6 m fire ring</span>
-      <span>{sw(COLORS.bldKnown)}Building, height from OSM tag or listing</span>
-      <span>{sw(COLORS.bldAssumed)}Building, estimated height (6 m assumed)</span>
+      <span>{sw(COLORS.bldKnown)}Height: OSM tag</span>
+      <span>{sw(COLORS.bldListing)}Height: sourced listing</span>
+      <span>{sw(COLORS.bldVisual)}Height: visual estimate</span>
+      <span>{sw(COLORS.bldAssumed)}Height unknown: 6 m assumed</span>
       <span>{sw(COLORS.rays)}Building-gap rays</span>
     </div>
   );
@@ -256,6 +277,36 @@ export function Messages({ results }: { results: Results }) {
   );
 }
 
+const trimNum = (x: number, d: number) => String(+x.toFixed(d));
+
+/** "area × ratio" for each zone part, shown so the displayed numbers multiply out to the displayed total:
+ *  areas are shown to whole m² unless that rounding would change the product's last digit. */
+function farSum(zone: Results['zone'], bonus: number, permitted: number): string {
+  const parts = (zone?.parts ?? []).filter((p) => isZone(p.zone));
+  if (!parts.length) return '';
+  const ratio = (z: Zone) => +(zoneFar(z) * (1 + bonus)).toFixed(4);
+  for (const d of [0, 1, 2]) {
+    const shown = parts.map((p) => +p.area.toFixed(d));
+    const total = shown.reduce((s, a, i) => s + a * ratio(parts[i].zone as Zone), 0);
+    if (Math.round(total) === Math.round(permitted) || d === 2) {
+      return parts.map((p, i) => `${shown[i].toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })} m² × ${trimNum(ratio(p.zone as Zone), 3)}`).join(' + ');
+    }
+  }
+  return '';
+}
+function areaLine(g: number, strip: number, net: number): string {
+  if (strip <= 0) return `${n0(g)} m²`;
+  for (const d of [0, 1, 2]) {
+    const f = (x: number) => +x.toFixed(d);
+    if (Math.abs(f(g) - f(strip) - f(net)) < 1e-9 || d === 2) {
+      const t = (x: number) => x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+      return `${t(g)} m² − ${t(strip)} m² widening strip = ${t(net)} m²`;
+    }
+  }
+  return '';
+}
+const isZone = (z: string): z is Zone => (SUPPORTED_ZONES as readonly string[]).includes(z);
+
 export function Summary({ results }: { results: Results }) {
   const { site, far, zone, avail, footprints, plane } = results;
   if (!site) return null;
@@ -263,9 +314,9 @@ export function Summary({ results }: { results: Results }) {
     <section className="summary">
       <dl>
         <dt>Zone</dt><dd>{zone?.parts.map((p) => p.zone).join(' + ') || '—'} {zone?.status === 'override' ? '(typed)' : zone?.status === 'straddle' ? '(straddles)' : ''}</dd>
-        <dt>Plot area</dt><dd>{n0(site.grossArea)} m²{site.stripArea > 0 ? ` − ${n0(site.stripArea)} m² widening strip = ${n0(site.netArea)} m²` : ''}</dd>
-        {far && <><dt>Floor area ratio</dt><dd>{n1(far.baseRatio)}:1{far.bonusPct.applied ? ` + ${pc(far.bonusPct.applied)} bonus = ${n1(far.ratioWithBonus)}:1` : ''}</dd>
-          <dt>Permitted floor area</dt><dd><b>{n0(far.permitted)} m²</b>{avail?.floorAreaCap ? ` (high-rise capped at ${n0(avail.floorAreaCap)} m², road under 18 m)` : ''}</dd>
+        <dt>Plot area</dt><dd>{areaLine(site.grossArea, site.stripArea, site.netArea)}</dd>
+        {far && <><dt>Floor area ratio</dt><dd>{n1(far.baseRatio)}:1{far.bonusPct.applied ? ` + ${pc(far.bonusPct.applied)} bonus = ${trimNum(far.ratioWithBonus, 3)}:1` : ''}</dd>
+          <dt>Permitted floor area</dt><dd>{farSum(zone, far.bonusPct.applied, far.permitted)} = <b>{n0(far.permitted)} m²</b>{avail?.floorAreaCap ? ` (high-rise capped at ${n0(avail.floorAreaCap)} m², road under 18 m)` : ''}</dd>
           <dt>Plan open space</dt><dd>{pc(far.osrWeighted)} of floor area, half planted</dd></>}
         {avail && <><dt>High-rise / extra-large</dt><dd>{avail.highRise ? 'available' : `unavailable: ${avail.reasons.join(' ')}`}</dd></>}
         {footprints && <><dt>Footprints</dt><dd>high-rise {n0(footprints.highRise.area)} m² · low-rise {n0(footprints.lowRise.area)} m²</dd></>}
@@ -276,6 +327,12 @@ export function Summary({ results }: { results: Results }) {
   );
 }
 
+const VIA: Record<Rule['source'], string> = {
+  gazette: 'Third-party copy: ASA PDF of the gazetted Thai text',
+  'Reg. translation': 'Third-party copy: IIBH English translation',
+  assumed: 'Tool assumption, not law',
+};
+
 export function RulesPanel({ used }: { used: Set<string> }) {
   const groups: [string, (r: Rule) => boolean][] = [
     ['City plan', (r) => r.clause.startsWith('Plan')],
@@ -285,6 +342,7 @@ export function RulesPanel({ used }: { used: Set<string> }) {
   const all = Object.values(RULES) as Rule[];
   return (
     <div className="rules">
+      <p className="muted">Every rule was read through a third-party copy. <b>gazette</b>: the Thai gazetted text in the Association of Siamese Architects' (ASA) PDF copies. <b>Reg. translation</b>: the IIBH English translation of the Ministerial Regulations, not the Thai text. <b>assumed</b>: this tool's assumption.</p>
       {groups.map(([g, f]) => (
         <details key={g} open={g !== 'Assumptions and tool limits'}>
           <summary>{g}</summary>
@@ -295,7 +353,7 @@ export function RulesPanel({ used }: { used: Set<string> }) {
                 <td>{r.label}{r.note ? <small className="muted"> {r.note}</small> : null}</td>
                 <td className="num">{+r.value.toFixed(4)} {r.unit}</td>
                 <td>{r.clause}</td>
-                <td><span className={`src ${r.source.replace(/\W/g, '')}`}>{r.source}</span>{r.verified === false ? <span className="src unverified">unverified</span> : null}</td>
+                <td><span className={`src ${r.source.replace(/\W/g, '')}`} title={VIA[r.source]}>{r.source}</span>{r.verified === false ? <span className="src unverified">unverified</span> : null}</td>
               </tr>
             ))}</tbody>
           </table>
@@ -318,7 +376,7 @@ export function Limits() {
         <li>The current road width is an estimate; the legal right-of-way needs the land-office parcel map or a survey.</li>
         <li>Simplification: the low-rise generator drops a floor rather than redesigning when the next floor would make it extra-large.</li>
         <li>Environmental review is a flag only; its trigger wording is unverified.</li>
-        <li>Building heights: {META.osm.sharePctEither}% of the {n0(META.osm.buildings)} OSM buildings here carry a height or levels tag ({META.extracted}); {META.osm.manual} more are set from public listings; the rest are drawn at an assumed {META.osm.defaultHeightM} m in a lighter tone.</li>
+        <li>Building heights: {META.osm.sharePctEither}% of the {n0(META.osm.buildings)} OSM buildings here carry a height or levels tag ({META.extracted}); {META.osm.manual} more are hand-set (sourced listing or visual estimate, shown in their own colours); the rest are drawn at an assumed {META.osm.defaultHeightM} m in a lighter tone.</li>
       </ul>
     </section>
   );

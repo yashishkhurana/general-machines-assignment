@@ -18,7 +18,7 @@ maplibregl.setWorkerUrl(workerUrl);
 export const COLORS = {
   plot: '#1d1f22', road: '#d1352b', strip: '#d1352b', fpHigh: '#2f6fdf', fpLow: '#1f9e8f',
   envHigh: '#2f6fdf', envLow: '#1f9e8f', residential: '#e8833a', parking: '#7a64b8', fire: '#9aa3ad',
-  bldKnown: '#8a9099', bldAssumed: '#cfd3d8', rays: '#7b3fbf', measure: '#e0a100',
+  bldKnown: '#8a9099', bldListing: '#5f7fa6', bldVisual: '#a8875a', bldAssumed: '#cfd3d8', rays: '#7b3fbf', measure: '#e0a100',
 };
 const ZONE_FILL: Record<string, string> = {
   residential_low: '#f3dc6b', residential_medium: '#f0a35b', residential_high: '#a86f3d', commercial: '#d9484a',
@@ -102,7 +102,7 @@ export function MapView(p: MapProps) {
         map.addSource('buildings', { type: 'geojson', data: BUILDINGS as any });
         const notDemolished: any = ['!', ['in', ['get', 'id'], ['literal', []]]];
         map.addLayer({ id: 'bld-assumed', type: 'fill-extrusion', source: 'buildings', filter: ['all', ['==', ['get', 'src'], 'assumed'], notDemolished], paint: { 'fill-extrusion-color': COLORS.bldAssumed, 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 0.55 } });
-        map.addLayer({ id: 'bld-known', type: 'fill-extrusion', source: 'buildings', filter: ['all', ['!=', ['get', 'src'], 'assumed'], notDemolished], paint: { 'fill-extrusion-color': COLORS.bldKnown, 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 0.85 } });
+        map.addLayer({ id: 'bld-known', type: 'fill-extrusion', source: 'buildings', filter: ['all', ['!=', ['get', 'src'], 'assumed'], notDemolished], paint: { 'fill-extrusion-color': ['match', ['get', 'src'], 'listing', COLORS.bldListing, 'visual', COLORS.bldVisual, COLORS.bldKnown] as any, 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 0.85 } });
         map.addLayer({ id: 'demolished', type: 'line', source: 'demolished', paint: { 'line-color': '#8a9099', 'line-width': 1, 'line-dasharray': [1, 2] } });
         map.addLayer({ id: 'strip', type: 'fill', source: 'strip', paint: { 'fill-color': COLORS.strip, 'fill-opacity': 0.35 } });
         map.addLayer({ id: 'fire', type: 'fill', source: 'fire', paint: { 'fill-color': COLORS.fire, 'fill-opacity': 0.35 } });
@@ -279,5 +279,26 @@ export function MapView(p: MapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.fitKey]);
 
-  return <div ref={el} className="map" aria-label="Map: draw the plot, pick the road edge" />;
+  // print: WebGL canvases often print blank, so render one frame now and print an image of it instead
+  const printImg = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    const snap = () => {
+      const map = mapRef.current, img = printImg.current;
+      if (!map || !img) return;
+      try {
+        (map as any).redraw?.();
+        img.src = map.getCanvas().toDataURL('image/png');
+      } catch { /* keep the previous snapshot */ }
+    };
+    (window as any).__snapMap = snap;
+    window.addEventListener('beforeprint', snap);
+    return () => window.removeEventListener('beforeprint', snap);
+  }, []);
+
+  return (
+    <>
+      <div ref={el} className="map" aria-label="Map: draw the plot, pick the road edge" />
+      <img ref={printImg} className="map-print" alt="Map snapshot for printing" />
+    </>
+  );
 }

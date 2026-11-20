@@ -135,7 +135,7 @@ export function conceptTower(site: Site, s: Settings, permitted: number, osr: nu
         const pl = plates[k];
         if (total + pl.area > cap + 1e-6) { binding = capLabel; break; }
         const isPark = k < P;
-        const sp = isPark ? Math.floor(pl.area / aps) : 0;
+        const sp = isPark ? spacesOn(pl.area, aps) : 0;
         total += pl.area; spaces += sp;
         if (isPark) parkingArea += pl.area; else residential += pl.area;
         floors.push({ level: String(k + 1), use: isPark ? 'parking' : 'residential', plate: pl.plate, area: pl.area, z0: pl.z0, z1: pl.z1, running: total, spaces: sp });
@@ -205,6 +205,12 @@ export function conceptTower(site: Site, s: Settings, permitted: number, osr: nu
 // Concept B: low-rise block (under 23 m roof deck and under 10,000 m² in total, parking included)
 // ------------------------------------------------------------------------------------------------
 
+/** Largest low-rise plate open space allows: 30% of the land open (Ordinance cl. 52(1)) and open space ≥ 30%
+ *  of the largest floor (Reg. 55 cl. 33), within the setback footprint. */
+export function lowRisePlateLimit(netArea: number, footprintArea: number): number {
+  return Math.min(footprintArea, netArea * (1 - rule('os.ord52')), netArea / (1 + rule('os.reg55')));
+}
+
 export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: number, mode: 'basement' | 'podium', id: 'A' | 'B' = 'B'): Concept {
   const aps = parkingAreaPerSpace(s);
   const hrLimit = rule('class.highrise.height');
@@ -229,14 +235,35 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
     lastFp = fp;
     if (fp.area < rule('a.minPlate')) break;
     const maxK = mode === 'basement' ? 4 : N - 1;
-    // the plate is the largest open space allows; it is only shrunk when one such floor alone would break
-    // the 10,000 m² low-rise limit or the permitted floor area (huge plots)
-    const fullPlate = Math.min(fp.area, site.netArea * (1 - rule('os.ord52')), site.netArea / (1 + rule('os.reg55')));
+    // largest plate open space allows (Ordinance cl. 52(1), Reg. 55 cl. 33)
+    const fullPlate = lowRisePlateLimit(site.netArea, fp.area);
     for (let K = 0; K <= maxK; K++) {
       const storeysTotal = mode === 'basement' ? N + K : N;
-      const capArea = Math.min(fp.area, site.netArea * (1 - rule('os.ord52')), site.netArea / (1 + rule('os.reg55')), site.netArea / (1 + osr * storeysTotal), fullPlate >= xl ? (xl - 1) / storeysTotal : Infinity, fullPlate > permitted ? permitted / storeysTotal : Infinity);
-      const key = `${fp.area.toFixed(2)}|${capArea.toFixed(1)}`;
-      if (!trimCache.has(key)) trimCache.set(key, trimToArea(site, fp.mp, capArea));
+      // every limit on one uniform plate: open space (plan OSR on the total), total under 10,000 m²
+      // basements included, permitted floor area
+      const caps: [string, number][] = [
+        ['open space', Math.min(fullPlate, site.netArea / (1 + osr * storeysTotal))],
+        ['under 10,000 m² in total, basements included', Math.floor((xl - 1) / storeysTotal)],
+        ['permitted floor area', permitted / storeysTotal],
+      ];
+      let pmax = Infinity, limit = '';
+      for (const [l, v] of caps) if (v < pmax - 1e-9) { pmax = v; limit = l; }
+      // then the largest plate (1 m² steps) whose parking fits; arithmetic assumes no plane cut, which
+      // can only over-count the need, so a plate that passes here also passes after clipping
+      const parkingFits = (p: number) => {
+        const T = storeysTotal * p;
+        const res = (N - (mode === 'podium' ? K : 0)) * p;
+        return K * Math.floor(p / aps) >= parkingNeed(T, res, roofDeck, s).needed;
+      };
+      let target = pmax;
+      if (!parkingFits(target)) {
+        let q = Math.floor(pmax);
+        while (q >= rule('a.minPlate') && !parkingFits(q)) q--;
+        if (q >= rule('a.minPlate')) { target = q; limit = 'parking'; }
+      }
+      if (target < xl && limit === 'under 10,000 m² in total, basements included') skippedXL = true;
+      const key = `${fp.area.toFixed(2)}|${target.toFixed(3)}`;
+      if (!trimCache.has(key)) trimCache.set(key, trimToArea(site, fp.mp, target));
       const plate0 = trimCache.get(key)!;
       const a0 = mpArea(plate0);
       if (a0 < rule('a.minPlate')) continue;
@@ -248,7 +275,7 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
         const area = mpArea(plate);
         if (area < rule('a.minPlate')) { failed = true; break; }
         const isPark = mode === 'podium' && k < K;
-        const sp = isPark ? Math.floor(area / aps) : 0;
+        const sp = isPark ? spacesOn(area, aps) : 0;
         total += area; spaces += sp;
         if (isPark) parkingArea += area; else residential += area;
         floors.push({ level: String(k + 1), use: isPark ? 'parking' : 'residential', plate, area, z0, z1, running: total, spaces: sp });
@@ -256,7 +283,7 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
       if (failed) { heightStop = true; break; }
       if (mode === 'basement') {
         for (let b = 1; b <= K; b++) {
-          const sp = Math.floor(a0 / aps);
+          const sp = spacesOn(a0, aps);
           total += a0; spaces += sp; parkingArea += a0;
           floors.unshift({ level: `B${b}`, use: 'basement parking', plate: plate0, area: a0, z0: -b * 3.0, z1: -(b - 1) * 3.0, running: total, spaces: sp });
         }
@@ -264,12 +291,12 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
         let run = 0;
         for (const f of floors.sort((x, y) => levelOrder(x.level) - levelOrder(y.level))) { run += f.area; f.running = run; }
       }
-      if (total >= xl) { skippedXL = true; continue; }
+      if (total >= xl) continue;
       if (total > permitted + 1e-6) continue;
       const need = parkingNeed(total, residential, roofDeck, s);
       const req = openSpaceRequired(total, Math.max(...floors.map((f) => f.area)), site.netArea, osr, false);
       const ok = spaces >= need.needed && site.netArea - a0 >= req.governing - 1e-6;
-      const cand: Cand = { N, K, floors, total, residential, parkingArea, spaces, need, roofDeck, fp, plate0, req, ok, binding: '' };
+      const cand: Cand = { N, K, floors, total, residential, parkingArea, spaces, need, roofDeck, fp, plate0, req, ok, binding: limit };
       const better = (x: Cand, y: Cand | null) => !y || x.residential > y.residential + 1e-6 || (Math.abs(x.residential - y.residential) <= 1e-6 && x.K < y.K);
       if (ok && better(cand, best)) best = cand;
       if (better(cand, bestAny)) bestAny = cand;
@@ -287,15 +314,15 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
     return emptyConcept(id, title, kind, lastFp ?? lowRiseFootprint(site, 1, s.groundFloor), why, s, site, osr);
   }
   if (!best) notes.push(`No layout provides enough parking. Shown: the largest layout, which needs ${pick.need.needed} spaces and has ${pick.spaces}.`);
-  // what stopped it from going one bigger
+  // what shaped the chosen layout
   const nextRoof = floorTops(s, pick.N).z1;
   let binding: string;
   if (!best) binding = 'parking';
-  else if (skippedXL) binding = 'under 10,000 m² in total (would become extra-large)';
-  else if (nextRoof >= hrLimit) binding = 'roof deck under 23 m';
-  else if (heightStop) binding = 'height plane';
-  else binding = 'parking';
-  if (skippedXL) notes.push('Simplification: the generator drops a floor (or a basement) rather than redesign when the next one would take the total to 10,000 m² and make the building extra-large.');
+  else if (nextRoof >= hrLimit) binding = `roof deck under 23 m (no room for floor ${pick.N + 1}); plate set by ${pick.binding}`;
+  else if (heightStop) binding = `height plane; plate set by ${pick.binding}`;
+  else binding = `plate set by ${pick.binding}`;
+  notes.push('Simplification: the generator keeps one plate size for every floor (trimmed from the rear) and compares floor and basement counts; it does not step individual floors or redesign. Chosen: the layout with the most residential floor area that meets every limit.');
+  void skippedXL;
   const cls = classify(pick.total, pick.roofDeck, Math.max(...pick.floors.map((f) => f.area)));
   const top = pick.floors.filter((f) => !f.level.startsWith('B')).slice(-1)[0];
   const provided = site.netArea - mpArea(pick.plate0);
@@ -309,6 +336,9 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
   };
 }
 
+/** Spaces that fit on a plate. 0.05 m² of slack absorbs the trim's geometric tolerance, so a plate trimmed
+ *  to exactly n spaces' area isn't counted as n − 1. */
+const spacesOn = (area: number, aps: number) => Math.floor((area + 0.05) / aps);
 const levelOrder = (l: string) => (l.startsWith('B') ? -Number(l.slice(1)) : Number(l));
 
 function emptyConcept(id: 'A' | 'B', title: string, kind: Concept['kind'], fp: Footprint, reason: string, s: Settings, site: Site, osr: number): Concept {

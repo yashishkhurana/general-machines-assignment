@@ -5,7 +5,7 @@ import zonesJson from '../data/zones.json';
 import metaJson from '../data/meta.json';
 
 export type LL = [number, number];
-export interface BuildingF { type: 'Feature'; properties: { id: number; h: number; src: 'height' | 'levels' | 'manual' | 'assumed'; name?: string; levels?: string; manual?: string }; geometry: { type: 'Polygon'; coordinates: LL[][] } }
+export interface BuildingF { type: 'Feature'; properties: { id: number; h: number; src: 'height' | 'levels' | 'listing' | 'visual' | 'assumed'; name?: string; levels?: string; floors?: number; manual?: string; note?: string }; geometry: { type: 'Polygon'; coordinates: LL[][] } }
 export interface RoadF { type: 'Feature'; properties: { id: number; highway: string; name?: string; 'name:en'?: string; lanes?: string; width?: string; sidewalk?: string; 'sidewalk:both'?: string; 'sidewalk:left'?: string; 'sidewalk:right'?: string; oneway?: string }; geometry: { type: 'LineString'; coordinates: LL[] } }
 export interface ZoneF { type: 'Feature'; properties: { zone: string; category: string }; geometry: { type: 'MultiPolygon'; coordinates: LL[][][] } }
 

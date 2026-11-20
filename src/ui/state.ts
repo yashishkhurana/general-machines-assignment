@@ -37,7 +37,7 @@ export function exampleState(): AppState {
 }
 
 // ---- URL: inputs live in the hash so a case can be shared ---------------------------------------
-const r7 = (x: number) => Math.round(x * 1e7) / 1e7;
+const r7 = (x: number) => Math.round(x * 1e9) / 1e9; // ~1 mm: keeps areas true to ~0.01 m²
 const r2 = (x: number) => Math.round(x * 100) / 100;
 
 export function encodeState(s: AppState): string {

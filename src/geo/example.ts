@@ -5,7 +5,7 @@
 import type { Pt } from '../core/geom';
 import { ROADS, type LL } from './data';
 import { makeFrame } from './project';
-import { along, gapEstimate, laneEstimate, polyline } from './roadWidth';
+import { along, estimateFrontage, gapEstimate, laneEstimate, polyline } from './roadWidth';
 
 export const EXAMPLE_WAY = 156261446;
 export const EXAMPLE_S0 = 406; // m along the way from its south end
@@ -20,6 +20,7 @@ export interface Example {
   current: number; // building-gap upper bound, not a survey
   gapMedian: number;
   gapRays: number;
+  gapTotal: number;
   laneLowerBound: number | null;
 }
 
@@ -31,21 +32,29 @@ export function soi39Example(): Example {
   const frame = makeFrame(way.geometry.coordinates[0]);
   const line = polyline(way.geometry.coordinates.map((c) => frame.toM(c)));
   const s0 = EXAMPLE_S0, s1 = EXAMPLE_S0 + EXAMPLE_FRONTAGE;
-  const gap = gapEstimate(frame, line, s0, s1);
-  const current = Math.round((gap.value ?? PLANNED_WIDTH) * 10) / 10;
+  // place the front edge at half the building-gap bound from the centreline, then re-measure the gap from
+  // that edge (the same estimator the app runs) until the two agree, so the default and the panel match
+  let current = Math.round((gapEstimate(frame, line, s0, s1).value ?? PLANNED_WIDTH) * 10) / 10;
   const A = along(line, s0), B = along(line, s1);
-  // chord direction and its left normal (west, for a road running north)
   const dx = B.p[0] - A.p[0], dy = B.p[1] - A.p[1], L = Math.hypot(dx, dy);
-  const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
-  const off = current / 2;
-  const f0: Pt = [A.p[0] + nx * off, A.p[1] + ny * off];
-  const f1: Pt = [f0[0] + ux * EXAMPLE_FRONTAGE, f0[1] + uy * EXAMPLE_FRONTAGE];
-  const r1: Pt = [f1[0] + nx * EXAMPLE_DEPTH, f1[1] + ny * EXAMPLE_DEPTH];
-  const r0: Pt = [f0[0] + nx * EXAMPLE_DEPTH, f0[1] + ny * EXAMPLE_DEPTH];
-  const ring = [f0, f1, r1, r0].map((p) => {
+  const ux = dx / L, uy = dy / L, nx = -uy, ny = ux; // left normal: west, for a road running north
+  const build = (cur: number): Pt[] => {
+    const f0: Pt = [A.p[0] + nx * cur / 2, A.p[1] + ny * cur / 2];
+    const f1: Pt = [f0[0] + ux * EXAMPLE_FRONTAGE, f0[1] + uy * EXAMPLE_FRONTAGE];
+    return [f0, f1, [f1[0] + nx * EXAMPLE_DEPTH, f1[1] + ny * EXAMPLE_DEPTH], [f0[0] + nx * EXAMPLE_DEPTH, f0[1] + ny * EXAMPLE_DEPTH]];
+  };
+  let pts = build(current);
+  let est = estimateFrontage(frame, pts[0], pts[1]);
+  for (let i = 0; i < 3 && est.gap?.value != null && Math.abs(Math.round(est.gap.value * 10) / 10 - current) > 1e-9; i++) {
+    current = Math.round(est.gap.value * 10) / 10;
+    pts = build(current);
+    est = estimateFrontage(frame, pts[0], pts[1]);
+  }
+  const ring = pts.map((p) => {
     const ll = frame.toLL(p);
-    return [Math.round(ll[0] * 1e7) / 1e7, Math.round(ll[1] * 1e7) / 1e7] as LL;
+    return [Math.round(ll[0] * 1e9) / 1e9, Math.round(ll[1] * 1e9) / 1e9] as LL;
   });
-  cached = { ring, roadEdge: 0, planned: PLANNED_WIDTH, current, gapMedian: gap.median ?? 0, gapRays: gap.rays, laneLowerBound: laneEstimate(way).value };
+  const gap = est.gap ?? { median: 0, rays: 0, total: 0 };
+  cached = { ring, roadEdge: 0, planned: PLANNED_WIDTH, current, gapMedian: gap.median ?? 0, gapRays: gap.rays, gapTotal: gap.total, laneLowerBound: laneEstimate(way).value };
   return cached;
 }

@@ -40,7 +40,7 @@ describe('Soi 39 example parcel', () => {
     expect(ex.current).toBeGreaterThan(6.5); // above the lanes lower bound
     expect(ex.current).toBeLessThan(16);
     expect(ex.laneLowerBound).toBeCloseTo(6.5, 6); // lanes=2 × 3.25 m, no sidewalk tags
-    console.log(`Soi 39 example: building-gap upper bound ${ex.current} m (median ${ex.gapMedian.toFixed(1)} m over ${ex.gapRays} rays); lanes lower bound ${ex.laneLowerBound} m`);
+    console.log(`Soi 39 example: building-gap upper bound ${ex.current} m, ${ex.gapRays} of ${ex.gapTotal} rays, median ${ex.gapMedian.toFixed(1)} m; lanes lower bound ${ex.laneLowerBound} m; ring ${JSON.stringify(ex.ring)}`);
   });
   it('draws a widening strip and removes it from plot area', () => {
     expect(r.site!.stripArea).toBeGreaterThan(0);
@@ -89,5 +89,15 @@ describe('zone fixtures on the real layer', () => {
   it('a plot drawn over Soi 39 itself is flagged', () => {
     const r = run(square([100.57128, 13.7337], 15));
     expect(r.messages.some((m) => m.code === 'overRoad')).toBe(true);
+  });
+});
+
+describe('fix 1: displayed area × ratio equals displayed floor area', () => {
+  it('example: 1,910 m² × 8 = 15,280 m² (true-scale local projection)', () => {
+    const ex = soi39Example();
+    const r = run(ex.ring, ex.planned, ex.current);
+    expect(r.site!.grossArea).toBeCloseTo(2000, 1);
+    expect(Math.round(r.site!.netArea)).toBe(1910);
+    expect(Math.round(r.far!.permitted)).toBe(1910 * 8);
   });
 });

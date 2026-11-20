@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { availability, classify } from '../src/core/classify';
 import { compute } from '../src/core/compute';
-import { conceptLowRise } from '../src/core/concepts';
+import { conceptLowRise, lowRisePlateLimit } from '../src/core/concepts';
 import { planeHeightAt } from '../src/core/envelope';
 import { buildingLine, highRiseFootprint, lowRiseFootprint, lowRiseFront } from '../src/core/footprint';
 import { mpArea, type Ring } from '../src/core/geom';
@@ -64,9 +64,8 @@ describe('§8 fixture: 40 × 50 m, 40 m side on a 16 m road, ย.10', () => {
   it('review: low-rise footprint after setbacks (3 m sides and rear, 2 m front) is 34 × 45 = 1,530 m²', () => {
     expect(lowRiseFootprint(site, 7, 22.4).area).toBeCloseTo(1530, 1);
   });
-  it('low-rise plate after the 30% open-space rule: 1,400 m²', () => {
-    const c = conceptLowRise(site, S(), 16000, 0.04, 'basement');
-    expect(mpArea(c.openSpace.groundPlate)).toBeCloseTo(1400, 0);
+  it('low-rise plate after the 30% open-space rule: 1,400 m² (the largest plate; the generator may choose a smaller one)', () => {
+    expect(lowRisePlateLimit(site.netArea, lowRiseFootprint(site, 7, 22.4).area)).toBeCloseTo(1400, 6);
   });
   it('7 floors, no basement: 9,800 m² is low-rise', () => expect(classify(9800, 22.4).lowRise).toBe(true));
   it('7 floors + one 1,400 m² basement: 11,200 m² is extra-large, not low-rise', () => {
@@ -90,21 +89,29 @@ describe('review: parking (Reg. 7 cl. 3(1)(C)/(H), Reg. 41)', () => {
     expect(parkingAreaPerSpace(S())).toBeCloseTo(26.88, 9);
   });
   const site = buildSite(RECT, road(16));
-  it('low-rise at 26.88 m²/space: 5 floors + 2 basements, 9,800 m², 82 needed, 104 fit', () => {
+  it('G8 (updated): at 26.88 m²/space the most residential layout is 6 floors + 2 basements on a 1,249 m² plate', () => {
+    // was 5 + 2 on 1,400 m² (7,000 m² residential). Shrinking the plate to stay under 10,000 m² in total
+    // lets a 6th floor in: 8 × 1,249 = 9,992 m², 84 spaces needed (1 per 120 m²), 2 × 46 = 92 fit.
     const c = conceptLowRise(site, S(), 16000, 0.04, 'basement');
-    expect(c.storeys).toBe(5);
-    expect(c.basements).toBe(2);
-    expect(c.total).toBeCloseTo(9800, 0);
-    expect(c.parking.needed).toBe(82);
-    expect(c.parking.provided).toBe(104);
+    expect([c.storeys, c.basements]).toEqual([6, 2]);
+    expect(mpArea(c.openSpace.groundPlate)).toBeCloseTo(1249, 0);
+    expect(c.total).toBeLessThan(10000);
+    expect(c.total).toBeGreaterThan(9990);
+    expect(c.residential).toBeGreaterThan(7490);
+    expect(c.parking.needed).toBe(84);
+    expect(c.parking.provided).toBe(92);
   });
-  it('low-rise at ~30 m²/space (brief): 5 + 2, 82 needed, ~93 fit; 6 + 1 fails (~46 fit)', () => {
+  it('G8 (updated): at the brief\'s ~30 m²/space it is 6 + 2 on a 1,230 m² plate (82 needed, 2 × 41 = 82 fit, 7,380 m² residential)', () => {
     const c = conceptLowRise(site, S({ parkingAreaPerSpace: 30 }), 16000, 0.04, 'basement');
-    expect([c.storeys, c.basements]).toEqual([5, 2]);
+    expect([c.storeys, c.basements]).toEqual([6, 2]);
+    expect(mpArea(c.openSpace.groundPlate)).toBeCloseTo(1230, 0);
     expect(c.parking.needed).toBe(82);
-    expect(c.parking.provided).toBe(92); // 2 × floor(1,400 / 30); 2,800 / 30 = 93.3 in aggregate
-    expect(Math.floor(1400 / 30)).toBe(46);
-    expect(parkingNeed(9800, 8400, 19.2, S()).needed).toBeGreaterThan(46);
+    expect(c.parking.provided).toBe(82);
+    expect(c.residential).toBeCloseTo(7380, 0);
+  });
+  it('the brief\'s 5 + 2 layout still checks out but has less residential: 9,800 m² total, 82 needed, 104 fit at 26.88', () => {
+    expect(parkingNeed(9800, 7000, 16.8, S()).needed).toBe(82);
+    expect(2 * Math.floor(1400 / parkingAreaPerSpace(S()))).toBe(104);
   });
   it('6 floors + 1 basement fails at 26.88 m²/space (52 fit, 82 needed)', () => {
     expect(Math.floor(1400 / parkingAreaPerSpace(S()))).toBe(52);
@@ -266,7 +273,7 @@ describe('break cases found while testing', () => {
     const r = compute(input({ roads: [{ edge: 0, width: 16, current: 16 }, { edge: 2, width: 10, current: 10 }] }));
     const b = r.concepts.find((c) => c.concept.id === 'B')!.concept;
     expect(b.ok).toBe(true);
-    expect(mpArea(b.openSpace.groundPlate)).toBeCloseTo(1400, 0);
+    expect(mpArea(b.openSpace.groundPlate)).toBeCloseTo(1249, 0);
   });
 });
 
@@ -275,5 +282,27 @@ describe('§6: height plane leaves no usable floor', () => {
     const r = compute(input({ plot: [[0, 0], [40, 0], [40, 10], [0, 10]], roads: road(0.5), settings: S({ groundFloor: 12 }) }));
     expect(r.messages.map((m) => m.code)).toContain('planeNoFloor');
     expect(r.concepts.every((c) => !c.concept.ok)).toBe(true);
+  });
+});
+
+describe('W4: planned 16 m line for setbacks and the height plane, current width for access', () => {
+  it('current 9.9 m, planned 16 m: high-rise access fails on the current width, though 16 m would pass', () => {
+    const site = buildSite(RECT, road(16, 9.9));
+    const a = availability(site, S());
+    expect(a.highRise).toBe(false);
+    expect(a.reasons.join(' ')).toContain('9.9 m (current)');
+    expect(availability(buildSite(RECT, road(16, 16)), S()).highRise).toBe(true);
+  });
+  it('height plane uses the planned far boundary: 6 m behind the planned line it is 2 × (6 + 16) = 44 m, not 2 × (6 + 9.9)', () => {
+    const site = buildSite(RECT, road(16, 9.9));
+    const strip = (16 - 9.9) / 2;
+    expect(planeHeightAt(site, [20, strip + 6])).toBeCloseTo(44, 6);
+  });
+  it('building line uses the planned 16 m width (1.6 m), measured from the planned line, not the 8 m current (2 m)', () => {
+    // 3 storeys / 10.4 m: Ordinance cl. 55 needs only 1 m, so the cl. 50 tier decides the front
+    const site = buildSite(RECT, road(16, 8));
+    expect(lowRiseFront(site.roads[0], 3, 10.4)).toBeCloseTo(1.6, 9);
+    // 40 − 2 × 3 m sides = 34; 50 − 4 m strip − 1.6 m front − 3 m rear = 41.4
+    expect(lowRiseFootprint(site, 3, 10.4).area).toBeCloseTo(34 * 41.4, 1);
   });
 });

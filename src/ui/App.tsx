@@ -105,7 +105,7 @@ export function App() {
           <h1>Bangkok plot envelope</h1>
           <p>Condo feasibility under the B.E. 2556 plan, zones ย.8–ย.10</p>
         </div>
-        <Toolbar tool={tool} setTool={chooseTool} onReset={reset} onPrint={() => window.print()} onCopy={copy} copied={copied} isExample={isExample(state)} />
+        <Toolbar tool={tool} setTool={chooseTool} onReset={reset} onPrint={() => { (window as any).__snapMap?.(); window.print(); }} onCopy={copy} copied={copied} isExample={isExample(state)} />
       </header>
       <aside className="left">
         <InputsPanel state={state} results={results} estimates={estimates} measured={measured} setRoads={setRoads} setSettings={setSettings} setZone={setZone} setView={setView} />

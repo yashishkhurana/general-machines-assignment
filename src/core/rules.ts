@@ -1,8 +1,10 @@
 // The one rules table. Every rule value used by the calculation lives here, with its clause and source.
-// Source tags:
-//   gazette          - read in the Thai text published in the Royal Gazette (the 2556 plan, or the
-//                      Bangkok Building Control Ordinance B.E. 2544, ASA copy of the gazetted text)
-//   Reg. translation - read in the IIBH English translation of the Ministerial Regulations
+// Source tags (every rule was read through a third-party copy; none on the Royal Gazette's own site):
+//   gazette          - the Thai gazetted text, read in the Association of Siamese Architects' (ASA) PDF copies
+//                      at download.asa.or.th: the 2556 plan (mr56-bma.pdf, mr56-bma-full.pdf) and the
+//                      Bangkok Building Control Ordinance B.E. 2544 (bb44-03.pdf)
+//   Reg. translation - the IIBH English translation of the Ministerial Regulations (Thai_02_MRs.pdf),
+//                      not the Thai text
 //   assumed          - a modelling assumption made by this tool, not law
 // `verified: false` marks rules whose wording has only been seen in secondary sources.
 
