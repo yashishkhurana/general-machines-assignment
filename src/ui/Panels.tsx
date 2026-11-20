@@ -1,5 +1,5 @@
 import { Fragment, useState, type ReactNode } from 'react';
-import type { CheckItem } from '../core/checklist';
+import { lowRiseMargins, type CheckItem } from '../core/checklist';
 import type { Results } from '../core/compute';
 import type { Concept } from '../core/concepts';
 import { parkingAreaPerSpace } from '../core/metrics';
@@ -258,6 +258,12 @@ export function ConceptCard({ c, checks }: { c: Concept; checks: CheckItem[] }) 
             <div><b className={fails ? 'bad' : 'good'}>{fails ? `${fails} fail` : 'all pass'}</b><span>checklist</span></div>
           </div>
           <p className="muted">Class: {c.cls.label}. Stopped by: <b>{c.binding}</b>. Cap {n0(c.cap)} m² ({c.capLabel}).</p>
+          {c.kind !== 'tower' && c.cls.lowRise && (() => {
+            const m = lowRiseMargins(c);
+            const pct = (100 * m.area) / ruleValue('class.extralarge.area');
+            const fragile = m.area / ruleValue('class.extralarge.area') < ruleValue('class.extralarge.margin');
+            return <p className={`margin${fragile ? ' warn' : ''}`}><b>{n0(m.area)} m²</b> ({pct.toFixed(2)}%) under the 10,000 m² extra-large line, <b>{n1(m.height)} m</b> under the 23 m high-rise line.{fragile ? ' Fragile: a survey or measurement difference of a fraction of a percent would make it extra-large and lose the low-rise envelope.' : ''}</p>;
+          })()}
           {c.notes.map((n, i) => <p key={i} className="note">{n}</p>)}
           <details open><summary>Floor table</summary><FloorTable c={c} /></details>
           <details open><summary>Checklist</summary><Checklist items={checks} /></details>
@@ -320,7 +326,7 @@ export function Summary({ results }: { results: Results }) {
           <dt>Plan open space</dt><dd>{pc(far.osrWeighted)} of floor area, half planted</dd></>}
         {avail && <><dt>High-rise / extra-large</dt><dd>{avail.highRise ? 'available' : `unavailable: ${avail.reasons.join(' ')}`}</dd></>}
         {footprints && <><dt>Footprints</dt><dd>high-rise {n0(footprints.highRise.area)} m² · low-rise {n0(footprints.lowRise.area)} m²</dd></>}
-        {plane && footprints && footprints.highRise.area > 0 && <><dt>Height plane</dt><dd>{n1(plane.atHighRiseFront)} m at the high-rise front line, rising 2 m per metre back</dd></>}
+        {plane && footprints && footprints.highRise.area > 0 && <><dt>Height plane</dt><dd>{n1(plane.atHighRiseFront)} m at the high-rise front line, rising 2 m per metre back{Math.abs(plane.atHighRiseFrontNow - plane.atHighRiseFront) > 0.05 ? `. Measured to the planned far boundary (art. 36 ¶2); to the road's current far boundary it would be ${n1(plane.atHighRiseFrontNow)} m` : ''}</dd></>}
         {site.roads.map((r) => <Fragment key={r.edge}><dt>Road, edge {r.inputEdge + 1}</dt><dd>{n1(r.width)} m legal, {n1(r.current)} m current, frontage {n1(r.frontage)} m{r.strip > 0 ? `, strip ${n1(r.strip)} m` : ''}</dd></Fragment>)}
       </dl>
     </section>
@@ -328,7 +334,7 @@ export function Summary({ results }: { results: Results }) {
 }
 
 const VIA: Record<Rule['source'], string> = {
-  gazette: 'Third-party copy: ASA PDF of the gazetted Thai text',
+  gazette: 'Third-party copy: ASA PDF of the Thai text',
   'Reg. translation': 'Third-party copy: IIBH English translation',
   assumed: 'Tool assumption, not law',
 };
@@ -342,7 +348,7 @@ export function RulesPanel({ used }: { used: Set<string> }) {
   const all = Object.values(RULES) as Rule[];
   return (
     <div className="rules">
-      <p className="muted">Every rule was read through a third-party copy. <b>gazette</b>: the Thai gazetted text in the Association of Siamese Architects' (ASA) PDF copies. <b>Reg. translation</b>: the IIBH English translation of the Ministerial Regulations, not the Thai text. <b>assumed</b>: this tool's assumption.</p>
+      <p className="muted">Every rule was read through a third-party copy. <b>gazette</b>: the Thai text in the Association of Siamese Architects' (ASA) PDF copies (the plan, the Ordinance, and ASA's consolidated texts of Reg. 33 and Reg. 55 with amendments). <b>Reg. translation</b>: only the IIBH English translation (Reg. 7, Reg. 41), not the Thai text. <b>assumed</b>: this tool's assumption.</p>
       {groups.map(([g, f]) => (
         <details key={g} open={g !== 'Assumptions and tool limits'}>
           <summary>{g}</summary>

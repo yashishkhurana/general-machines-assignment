@@ -32,9 +32,14 @@ export function buildSite(plot: Ring, roadInputs: RoadEdgeInput[]): Site {
       const width = Math.max(r.width, current);
       const strip = Math.max(0, (r.width - current) / 2); // symmetric widening about the centreline (assumption)
       const [nearA, nearB] = offsetRight(a, b, -strip);
+      // Height plane (Reg. 55 cl. 44) is measured to the far boundary of the PLANNED right-of-way: plan art. 36 ¶2
+      // makes the planned line the road line "for building lines and distances" under building-control law, and
+      // the plane is a distance rule (brief item 8; decisions W3). The current far boundary is kept for the
+      // sensitivity figure shown beside it. Access (Reg. 33 cl. 2) is a road-width rule, tested on the current width.
       const [farA, farB] = offsetRight(a, b, current + strip, FAR_EXTENSION);
+      const [farNowA, farNowB] = offsetRight(a, b, current, FAR_EXTENSION);
       const [centreA, centreB] = offsetRight(a, b, current / 2);
-      return { edge, inputEdge: r.edge, a, b, width, current, strip, frontage: dist(a, b), nearA, nearB, farA, farB, centreA, centreB };
+      return { edge, inputEdge: r.edge, a, b, width, current, strip, frontage: dist(a, b), nearA, nearB, farA, farB, farNowA, farNowB, centreA, centreB };
     });
   const strips = roads
     .filter((r) => r.strip > 0)

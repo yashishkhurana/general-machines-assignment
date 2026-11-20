@@ -2,7 +2,7 @@
 import { availability, type Availability } from './classify';
 import { checklist, type CheckItem } from './checklist';
 import { conceptLowRise, conceptTower, type Concept } from './concepts';
-import { planeRange } from './envelope';
+import { planeHeightNowAt, planeRange } from './envelope';
 import { highRiseFootprint, lowRiseFootprint, type Footprint } from './footprint';
 import { floorArea, resolveZone, type FloorAreaResult, type ZoneResult } from './metrics';
 import { buildSite } from './site';
@@ -17,7 +17,7 @@ export interface Results {
   far: FloorAreaResult | null;
   avail: Availability | null;
   footprints: { highRise: Footprint; lowRise: Footprint } | null;
-  plane: { atHighRiseFront: number; atLowRiseFront: number } | null;
+  plane: { atHighRiseFront: number; atLowRiseFront: number; atHighRiseFrontNow: number } | null;
   concepts: { concept: Concept; checks: CheckItem[] }[];
 }
 
@@ -50,7 +50,8 @@ export function compute(input: SiteInput): Results {
     const highRise = highRiseFootprint(site);
     const lowRise = lowRiseFootprint(site, 7, 22.4);
     const pr = (fp: Footprint) => (fp.area > 0 ? planeRange(site, fp.mp).min : 0);
-    const plane = { atHighRiseFront: pr(highRise), atLowRiseFront: pr(lowRise) };
+    const prNow = (fp: Footprint) => (fp.area > 0 ? Math.min(...fp.mp.flatMap((poly) => poly[0].map((p) => planeHeightNowAt(site, p)))) : 0);
+    const plane = { atHighRiseFront: pr(highRise), atLowRiseFront: pr(lowRise), atHighRiseFrontNow: prNow(highRise) };
     if (lowRise.area < 1) messages.push({ level: 'warn', code: 'noBuildable', text: 'Setbacks leave no buildable area for a low-rise building.' });
     if (highRise.area < 1) messages.push({ level: 'warn', code: 'noBuildableHR', text: 'High-rise setbacks (6 m all round) leave no buildable area.' });
 

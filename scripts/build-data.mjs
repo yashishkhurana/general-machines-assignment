@@ -90,7 +90,8 @@ const MANUAL = {
   208691131: { floors: 22, kind: 'listing', name: 'PSI Tower', src: "sourced: contractor's project page" },
   324280507: { floors: 30, kind: 'listing', name: 'D.S. Tower II', src: 'sourced: property listing' },
   324280512: { floors: 9, kind: 'listing', name: '39 Suites', src: 'sourced: property listing' },
-  // The Manor (340477772): visual estimate pending, level count not yet given. Stays assumed.
+  331962370: { floors: 6, kind: 'visual', name: 'Former Banphaeo Hospital, Prommitr branch (Soi Phrom Mit)', src: 'visual estimate, Street View Aug 2024, north face from Soi Phrom Mit; open ground floor, a tall blank level, four window rows; ±1 level, medium-low confidence' },
+  // The Manor (340477772): not set. The building could not be identified on street imagery. Stays assumed.
 };
 // Kept at the OSM tag on purpose, with the disagreeing source noted.
 const NOTES = {

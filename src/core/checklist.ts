@@ -45,6 +45,11 @@ export function roadFace(site: Site, plate: MultiPoly) {
   return { face, perimeter };
 }
 
+/** How far a low-rise result sits under the extra-large (10,000 m²) and high-rise (23 m) lines. */
+export function lowRiseMargins(c: Concept) {
+  return { area: rule('class.extralarge.area') - c.total, height: rule('class.highrise.height') - c.roofDeck };
+}
+
 export function checklist(c: Concept, site: Site, avail: Availability, s: Settings, permitted: number, kind: 'tower' | 'low'): CheckItem[] {
   const items: CheckItem[] = [];
   if (!c.ok) return items;
@@ -60,6 +65,9 @@ export function checklist(c: Concept, site: Site, avail: Availability, s: Settin
     push({ id: 'fireRing', label: '6 m fire-engine road all round, kept clear at ground level', status: 'pass', required: '6 m ring', provided: 'modelled as a clear, paved 6 m ring', clause: 'Reg. 33 cl. 3', rules: ['hr.fireRoad'] });
   } else {
     push({ id: 'lowrise', label: 'Stays low-rise: roof deck under 23 m and total floor area under 10,000 m², parking included', status: pf(c.cls.lowRise), required: '< 23 m and < 10,000 m²', provided: `${n1(c.roofDeck)} m, ${n0(c.total)} m²`, clause: 'Reg. 33 cl. 1', rules: ['class.highrise.height', 'class.extralarge.area'] });
+    const m = lowRiseMargins(c);
+    const fragile = m.area / rule('class.extralarge.area') < rule('class.extralarge.margin');
+    push({ id: 'xlMargin', label: 'Margin under the extra-large line (10,000 m²) and the high-rise line (23 m)', status: fragile ? 'warn' : 'pass', required: `≥ ${n0(rule('class.extralarge.margin') * rule('class.extralarge.area'))} m² to be robust`, provided: `${n0(m.area)} m² (${(100 * m.area / rule('class.extralarge.area')).toFixed(2)}%), ${n1(m.height)} m${fragile ? ': fragile, a survey difference of a fraction of a percent tips it over' : ''}`, clause: 'Reg. 33 cl. 1', rules: ['class.extralarge.area', 'class.extralarge.margin'] });
     const sb = c.footprint.setbacks;
     const front = sb.filter((x) => x.road).map((x) => x.setback);
     const side = sb.filter((x) => !x.road).map((x) => x.setback);

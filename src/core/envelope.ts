@@ -6,6 +6,13 @@ import { clean, difference, mpArea, pointSegDist, segmentBuffer, union, type Mul
 import { rule } from './rules';
 import type { Site } from './types';
 
+/** The plane measured to the road's current far boundary instead (shown as a sensitivity, not used). */
+export function planeHeightNowAt(site: Site, p: Pt): number {
+  let h = Infinity;
+  for (const r of site.roads) h = Math.min(h, rule('height.plane') * pointSegDist(p, r.farNowA, r.farNowB));
+  return h;
+}
+
 export function planeHeightAt(site: Site, p: Pt): number {
   let h = Infinity;
   for (const r of site.roads) h = Math.min(h, rule('height.plane') * pointSegDist(p, r.farA, r.farB));

@@ -79,6 +79,8 @@ table { border-collapse: collapse; width: 100%; }
 .summary dt { color: var(--muted); }
 .summary dd { margin: 0; font-variant-numeric: tabular-nums; }
 .err { color: var(--fail); }
+.margin { font-size: 0.85rem; margin: 6px 0; padding: 6px 8px; border-radius: 5px; background: var(--chip); }
+.margin.warn { border-left: 3px solid var(--warn); }
 .note { font-size: 0.85rem; background: var(--chip); padding: 6px 8px; border-radius: 5px; }
 .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
 .kpis div { background: var(--chip); border-radius: 6px; padding: 6px 8px; display: grid; }

@@ -60,8 +60,10 @@ export interface Road {
   frontage: number;
   nearA: Pt; // planned road boundary (legal line)
   nearB: Pt;
-  farA: Pt; // far boundary of the road, extended along the road
+  farA: Pt; // far boundary of the planned right-of-way, extended along the road (height plane)
   farB: Pt;
+  farNowA: Pt; // far boundary of the road as it is now (sensitivity figure only)
+  farNowB: Pt;
   centreA: Pt;
   centreB: Pt;
 }

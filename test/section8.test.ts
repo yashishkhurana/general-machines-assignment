@@ -3,9 +3,10 @@
 import { describe, expect, it } from 'vitest';
 import { availability, classify } from '../src/core/classify';
 import { compute } from '../src/core/compute';
+import { lowRiseMargins } from '../src/core/checklist';
 import { conceptLowRise, lowRisePlateLimit } from '../src/core/concepts';
-import { planeHeightAt } from '../src/core/envelope';
-import { buildingLine, highRiseFootprint, lowRiseFootprint, lowRiseFront } from '../src/core/footprint';
+import { planeHeightAt, planeHeightNowAt } from '../src/core/envelope';
+import { buildingLine, clearAround, highRiseFootprint, lowRiseFootprint, lowRiseFront } from '../src/core/footprint';
 import { mpArea, type Ring } from '../src/core/geom';
 import { floorArea, openSpaceRequired, parkingAreaPerSpace, parkingNeed, resolveZone } from '../src/core/metrics';
 import { buildSite } from '../src/core/site';
@@ -133,7 +134,10 @@ describe('review: ข-road widening (current 10 m, planned 16 m)', () => {
     expect(site.netArea).toBeCloseTo(1880, 3);
   });
   it('setbacks start from the new line: high-rise footprint 28 × 35 = 980 m²', () => expect(highRiseFootprint(site).area).toBeCloseTo(980, 1));
-  it('height plane measured to the planned far boundary: at 6 m behind the new line, 2 × (6 + 16) = 44 m', () => expect(planeHeightAt(site, [20, 9])).toBeCloseTo(44, 6));
+  it('height plane measured to the planned far boundary (art. 36 ¶2): at 6 m behind the new line, 2 × (6 + 16) = 44 m; to the current far boundary it would be 2 × (9 + 10) = 38 m', () => {
+    expect(planeHeightAt(site, [20, 9])).toBeCloseTo(44, 6);
+    expect(planeHeightNowAt(site, [20, 9])).toBeCloseTo(38, 6);
+  });
   it('access uses the current width: 10 m still meets Reg. 33 cl. 2', () => expect(availability(site, S()).highRise).toBe(true));
   it('permitted floor area counts only the plot behind the line: 1,880 × 8 = 15,040 m²', () => {
     const r = compute(input({ roads: road(16, 10) }));
@@ -293,10 +297,18 @@ describe('W4: planned 16 m line for setbacks and the height plane, current width
     expect(a.reasons.join(' ')).toContain('9.9 m (current)');
     expect(availability(buildSite(RECT, road(16, 16)), S()).highRise).toBe(true);
   });
-  it('height plane uses the planned far boundary: 6 m behind the planned line it is 2 × (6 + 16) = 44 m, not 2 × (6 + 9.9)', () => {
+  it('height plane uses the planned far boundary (a distance rule under art. 36 ¶2): 6 m behind the planned line it is 2 × (6 + 16) = 44 m', () => {
     const site = buildSite(RECT, road(16, 9.9));
     const strip = (16 - 9.9) / 2;
     expect(planeHeightAt(site, [20, strip + 6])).toBeCloseTo(44, 6);
+  });
+  it('the Soi 39 case: 44 m at the high-rise front line; the sensitivity figure to the current far boundary is 2 × (6 + 2.25 + 11.5) = 39.5 m', () => {
+    const site = buildSite(RECT, road(16, 11.5));
+    expect(planeHeightAt(site, [20, 2.25 + 6])).toBeCloseTo(44, 6);
+    expect(planeHeightNowAt(site, [20, 2.25 + 6])).toBeCloseTo(39.5, 6);
+    const r = compute(input({ roads: road(16, 11.5) }));
+    expect(r.plane!.atHighRiseFront).toBeCloseTo(44, 6);
+    expect(r.plane!.atHighRiseFrontNow).toBeCloseTo(39.5, 6);
   });
   it('building line uses the planned 16 m width (1.6 m), measured from the planned line, not the 8 m current (2 m)', () => {
     // 3 storeys / 10.4 m: Ordinance cl. 55 needs only 1 m, so the cl. 50 tier decides the front
@@ -304,5 +316,34 @@ describe('W4: planned 16 m line for setbacks and the height plane, current width
     expect(lowRiseFront(site.roads[0], 3, 10.4)).toBeCloseTo(1.6, 9);
     // 40 − 2 × 3 m sides = 34; 50 − 4 m strip − 1.6 m front − 3 m rear = 41.4
     expect(lowRiseFootprint(site, 3, 10.4).area).toBeCloseTo(34 * 41.4, 1);
+    // read on the 8 m current width instead, cl. 50 gives 2 m from the CURRENT boundary, which lies inside the
+    // 4 m widening strip, so the planned-line reading is the stricter one and governs
+    expect(buildingLine(8, 3, 10.4)).toBeCloseTo(2, 9);
+    expect(buildingLine(8, 3, 10.4) - site.roads[0].strip).toBeLessThan(lowRiseFront(site.roads[0], 3, 10.4));
+  });
+  it('Ordinance cl. 55 clear space is met on the road side in both height bands', () => {
+    const site = buildSite(RECT, road(16, 8));
+    // up to 15 m: 1 m clear; the 1.6 m building line already exceeds it
+    expect(lowRiseFront(site.roads[0], 3, 10.4)).toBeGreaterThanOrEqual(clearAround(10.4));
+    expect(clearAround(10.4)).toBe(1);
+    // over 15 m: 2 m clear governs the front (max(1.6, 2) = 2), measured from the planned line, inside the plot
+    expect(lowRiseFront(site.roads[0], 5, 16.8)).toBeCloseTo(2, 9);
+    expect(lowRiseFront(site.roads[0], 5, 16.8)).toBeGreaterThanOrEqual(clearAround(16.8));
+    // and the footprint honours it: the nearest footprint point is 2 m behind the planned line (y = 4)
+    const fp = lowRiseFootprint(site, 5, 16.8);
+    const minY = Math.min(...fp.mp.flatMap((poly) => poly[0].map((p) => p[1])));
+    expect(minY).toBeCloseTo(4 + 2, 3);
+  });
+});
+
+describe('margin to the extra-large line (shown beside the low-rise result)', () => {
+  it('fixture low-rise sits 8 m² under 10,000 m² and is flagged as fragile', () => {
+    const r = compute(input());
+    const B = r.concepts.find((c) => c.concept.id === 'B')!;
+    const m = lowRiseMargins(B.concept);
+    expect(m.area).toBeCloseTo(8, 0);
+    const line = B.checks.find((k) => k.id === 'xlMargin')!;
+    expect(line.status).toBe('warn');
+    expect(line.provided).toContain('fragile');
   });
 });

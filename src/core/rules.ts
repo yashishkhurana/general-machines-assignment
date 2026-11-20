@@ -1,10 +1,12 @@
 // The one rules table. Every rule value used by the calculation lives here, with its clause and source.
 // Source tags (every rule was read through a third-party copy; none on the Royal Gazette's own site):
-//   gazette          - the Thai gazetted text, read in the Association of Siamese Architects' (ASA) PDF copies
-//                      at download.asa.or.th: the 2556 plan (mr56-bma.pdf, mr56-bma-full.pdf) and the
-//                      Bangkok Building Control Ordinance B.E. 2544 (bb44-03.pdf)
-//   Reg. translation - the IIBH English translation of the Ministerial Regulations (Thai_02_MRs.pdf),
-//                      not the Thai text
+//   gazette          - the Thai text, read in the Association of Siamese Architects' (ASA) PDF copies at
+//                      download.asa.or.th: the 2556 plan (mr56-bma.pdf, mr56-bma-full.pdf), the Bangkok Building
+//                      Control Ordinance B.E. 2544 (bb44-03.pdf), and ASA's consolidated Thai texts of Reg. 33
+//                      (cba/mr/mr35-33-upd69.pdf) and Reg. 55 (cba/mr/mr43-55-upd68.pdf), which include later
+//                      amendments as footnotes (checked 21 Nov 2026)
+//   Reg. translation - only the IIBH English translation of the Ministerial Regulations (Thai_02_MRs.pdf), not the
+//                      Thai text; it predates amendments such as Reg. 68 (B.E. 2563)
 //   assumed          - a modelling assumption made by this tool, not law
 // `verified: false` marks rules whose wording has only been seen in secondary sources.
 
@@ -42,33 +44,34 @@ export const RULES = {
   'bonus.rain.landPerM3': R({ id: 'bonus.rain.landPerM3', value: 50, unit: 'm² of land', label: 'Land area per 1 m³ of storage for one 5% step', clause: 'Plan art. 55', source: 'gazette', appliesTo: 'all' }),
   'bonus.rain.cap': R({ id: 'bonus.rain.cap', value: 0.2, unit: '× base ratio', label: 'Rainwater bonus ceiling', clause: 'Plan art. 55', source: 'gazette', appliesTo: 'all' }),
   'bonus.energy.step': R({ id: 'bonus.energy.step', value: 0.05, unit: 'per level (1–4)', label: 'Energy-certified building bonus, +5/10/15/20%', clause: 'Plan art. 56', source: 'gazette', appliesTo: 'all' }),
-  'far.cap.reg33': R({ id: 'far.cap.reg33', value: 10, unit: ':1', label: 'Ratio cap, high-rise and extra-large', clause: 'Reg. 33 cl. 5', source: 'Reg. translation', appliesTo: 'high-rise, extra-large' }),
+  'far.cap.reg33': R({ id: 'far.cap.reg33', value: 10, unit: ':1', label: 'Ratio cap, high-rise and extra-large', clause: 'Reg. 33 cl. 5', source: 'gazette', appliesTo: 'high-rise, extra-large' }),
 
   // ---- Building classes -----------------------------------------------------------------------
-  'class.highrise.height': R({ id: 'class.highrise.height', value: 23, unit: 'm', label: 'High-rise: roof deck height from ground', clause: 'Reg. 33 cl. 1', source: 'Reg. translation', appliesTo: 'all' }),
-  'class.extralarge.area': R({ id: 'class.extralarge.area', value: 10000, unit: 'm²', label: 'Extra-large: total floor area, or any single floor', clause: 'Reg. 33 cl. 1', source: 'Reg. translation', appliesTo: 'all' }),
+  'class.highrise.height': R({ id: 'class.highrise.height', value: 23, unit: 'm', label: 'High-rise: roof deck height from ground', clause: 'Reg. 33 cl. 1', source: 'gazette', appliesTo: 'all' }),
+  'class.extralarge.margin': R({ id: 'class.extralarge.margin', value: 0.01, unit: '× 10,000 m²', label: 'Margin under 10,000 m² below which a low-rise result is flagged as fragile', clause: '—', source: 'assumed', appliesTo: 'low-rise' }),
+  'class.extralarge.area': R({ id: 'class.extralarge.area', value: 10000, unit: 'm²', label: 'Extra-large: total floor area, or any single floor', clause: 'Reg. 33 cl. 1', source: 'gazette', appliesTo: 'all' }),
   'class.large.area': R({ id: 'class.large.area', value: 2000, unit: 'm²', label: 'Large building: total floor area over', clause: 'Reg. 7 cl. 1(12); Reg. 55', source: 'Reg. translation', appliesTo: 'all' }),
   'class.large.altHeight': R({ id: 'class.large.altHeight', value: 15, unit: 'm', label: 'Large building also: over 15 m with over 1,000 m²', clause: 'Reg. 7 cl. 1(12)', source: 'Reg. translation', appliesTo: 'all' }),
   'class.large.altArea': R({ id: 'class.large.altArea', value: 1000, unit: 'm²', label: 'Large building alt. floor area', clause: 'Reg. 7 cl. 1(12)', source: 'Reg. translation', appliesTo: 'all' }),
 
   // ---- Access for high-rise / extra-large -----------------------------------------------------
-  'access.frontage': R({ id: 'access.frontage', value: 12, unit: 'm', label: 'Frontage on a public road', clause: 'Reg. 33 cl. 2', source: 'Reg. translation', appliesTo: 'high-rise, extra-large', note: 'That 12 m strip must stay open as a fire-engine entrance up to the building (cl. 2 ¶3).' }),
-  'access.road': R({ id: 'access.road', value: 10, unit: 'm', label: 'Road right-of-way, floor area up to 30,000 m²', clause: 'Reg. 33 cl. 2', source: 'Reg. translation', appliesTo: 'high-rise, extra-large' }),
-  'access.road.big': R({ id: 'access.road.big', value: 18, unit: 'm', label: 'Road right-of-way, floor area over 30,000 m²', clause: 'Reg. 33 cl. 2', source: 'Reg. translation', appliesTo: 'high-rise, extra-large' }),
-  'access.big.area': R({ id: 'access.big.area', value: 30000, unit: 'm²', label: 'Floor area above which an 18 m road is needed', clause: 'Reg. 33 cl. 2', source: 'Reg. translation', appliesTo: 'high-rise, extra-large' }),
+  'access.frontage': R({ id: 'access.frontage', value: 12, unit: 'm', label: 'Frontage on a public road', clause: 'Reg. 33 cl. 2', source: 'gazette', appliesTo: 'high-rise, extra-large', note: 'That 12 m strip must stay open as a fire-engine entrance up to the building (cl. 2 ¶3).' }),
+  'access.road': R({ id: 'access.road', value: 10, unit: 'm', label: 'Road right-of-way, floor area up to 30,000 m²', clause: 'Reg. 33 cl. 2', source: 'gazette', appliesTo: 'high-rise, extra-large' }),
+  'access.road.big': R({ id: 'access.road.big', value: 18, unit: 'm', label: 'Road right-of-way, floor area over 30,000 m²', clause: 'Reg. 33 cl. 2', source: 'gazette', appliesTo: 'high-rise, extra-large' }),
+  'access.big.area': R({ id: 'access.big.area', value: 30000, unit: 'm²', label: 'Floor area above which an 18 m road is needed', clause: 'Reg. 33 cl. 2', source: 'gazette', appliesTo: 'high-rise, extra-large' }),
 
   // ---- Setbacks ---------------------------------------------------------------------------------
-  'hr.setback': R({ id: 'hr.setback', value: 6, unit: 'm', label: 'High-rise: every part above and below ground from boundary and road', clause: 'Reg. 33 cl. 4', source: 'Reg. translation', appliesTo: 'high-rise, extra-large' }),
-  'hr.fireRoad': R({ id: 'hr.fireRoad', value: 6, unit: 'm', label: 'Fire-engine road or open space all round the building', clause: 'Reg. 33 cl. 3', source: 'Reg. translation', appliesTo: 'high-rise, extra-large', note: 'Modelled as a 6 m ring kept clear and paved at ground level (assumption).' }),
-  'front.narrow.road': R({ id: 'front.narrow.road', value: 6, unit: 'm', label: 'Road under 6 m: building line 3 m from centreline', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'Reg. translation', appliesTo: 'all' }),
-  'front.narrow.dist': R({ id: 'front.narrow.dist', value: 3, unit: 'm from centreline', label: 'Building line on a road under 6 m', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'Reg. translation', appliesTo: 'all' }),
-  'front.tier1.road': R({ id: 'front.tier1.road', value: 10, unit: 'm', label: 'Road under 10 m: 6 m from centreline (building over 2 storeys or 8 m)', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'Reg. translation', appliesTo: 'over 2 storeys / 8 m' }),
-  'front.tier1.dist': R({ id: 'front.tier1.dist', value: 6, unit: 'm from centreline', label: 'Building line on a road under 10 m', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'Reg. translation', appliesTo: 'over 2 storeys / 8 m' }),
-  'front.tier2.factor': R({ id: 'front.tier2.factor', value: 0.1, unit: '× road width', label: 'Road 10–20 m: 1/10 of the width from the road boundary', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'Reg. translation', appliesTo: 'over 2 storeys / 8 m' }),
-  'front.tier3.road': R({ id: 'front.tier3.road', value: 20, unit: 'm', label: 'Road width from which the 2 m building line applies', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'Reg. translation', appliesTo: 'over 2 storeys / 8 m' }),
-  'front.tier3.dist': R({ id: 'front.tier3.dist', value: 2, unit: 'm', label: 'Building line on a road of 20 m or more', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'Reg. translation', appliesTo: 'over 2 storeys / 8 m' }),
-  'front.tier.storeys': R({ id: 'front.tier.storeys', value: 2, unit: 'storeys', label: 'Tiers apply above 2 storeys', clause: 'Reg. 55 cl. 41', source: 'Reg. translation', appliesTo: 'all' }),
-  'front.tier.height': R({ id: 'front.tier.height', value: 8, unit: 'm', label: 'Tiers apply above 8 m', clause: 'Reg. 55 cl. 41', source: 'Reg. translation', appliesTo: 'all' }),
+  'hr.setback': R({ id: 'hr.setback', value: 6, unit: 'm', label: 'High-rise: every part above and below ground from boundary and road', clause: 'Reg. 33 cl. 4', source: 'gazette', appliesTo: 'high-rise, extra-large' }),
+  'hr.fireRoad': R({ id: 'hr.fireRoad', value: 6, unit: 'm', label: 'Fire-engine road with a traffic surface at least 6 m wide, unroofed, all round the building', clause: 'Reg. 33 cl. 3 (as amended by Reg. 50)', source: 'gazette', appliesTo: 'high-rise, extra-large', note: 'The Thai text requires a road surface (the IIBH translation\'s "road or open space" is the older wording). Where a widening line applies, its width counts from that line (cl. 3 ¶3). Modelled as a paved 6 m ring inside the planned line.' }),
+  'front.narrow.road': R({ id: 'front.narrow.road', value: 6, unit: 'm', label: 'Road under 6 m: building line 3 m from centreline', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'gazette', appliesTo: 'all' }),
+  'front.narrow.dist': R({ id: 'front.narrow.dist', value: 3, unit: 'm from centreline', label: 'Building line on a road under 6 m', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'gazette', appliesTo: 'all' }),
+  'front.tier1.road': R({ id: 'front.tier1.road', value: 10, unit: 'm', label: 'Road under 10 m: 6 m from centreline (building over 2 storeys or 8 m)', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'gazette', appliesTo: 'over 2 storeys / 8 m' }),
+  'front.tier1.dist': R({ id: 'front.tier1.dist', value: 6, unit: 'm from centreline', label: 'Building line on a road under 10 m', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'gazette', appliesTo: 'over 2 storeys / 8 m' }),
+  'front.tier2.factor': R({ id: 'front.tier2.factor', value: 0.1, unit: '× road width', label: 'Road 10–20 m: 1/10 of the width from the road boundary', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'gazette', appliesTo: 'over 2 storeys / 8 m' }),
+  'front.tier3.road': R({ id: 'front.tier3.road', value: 20, unit: 'm', label: 'Road width from which the 2 m building line applies', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'gazette', appliesTo: 'over 2 storeys / 8 m' }),
+  'front.tier3.dist': R({ id: 'front.tier3.dist', value: 2, unit: 'm', label: 'Building line on a road of 20 m or more', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'gazette', appliesTo: 'over 2 storeys / 8 m' }),
+  'front.tier.storeys': R({ id: 'front.tier.storeys', value: 2, unit: 'storeys', label: 'Tiers apply above 2 storeys', clause: 'Reg. 55 cl. 41', source: 'gazette', appliesTo: 'all' }),
+  'front.tier.height': R({ id: 'front.tier.height', value: 8, unit: 'm', label: 'Tiers apply above 8 m', clause: 'Reg. 55 cl. 41', source: 'gazette', appliesTo: 'all' }),
   'clear.low': R({ id: 'clear.low', value: 1, unit: 'm', label: 'Clear space all round a building up to 15 m', clause: 'Ordinance cl. 55', source: 'gazette', appliesTo: 'all' }),
   'clear.high': R({ id: 'clear.high', value: 2, unit: 'm', label: 'Clear space all round a building over 15 m (road side included)', clause: 'Ordinance cl. 55', source: 'gazette', appliesTo: 'all' }),
   'clear.height': R({ id: 'clear.height', value: 15, unit: 'm', label: 'Height above which 2 m clear applies', clause: 'Ordinance cl. 55', source: 'gazette', appliesTo: 'all' }),
@@ -80,12 +83,12 @@ export const RULES = {
   'face.within': R({ id: 'face.within', value: 20, unit: 'm', label: 'Road-side face within 20 m of the road', clause: 'Ordinance cl. 53', source: 'gazette', appliesTo: 'building on a public way' }),
 
   // ---- Height ---------------------------------------------------------------------------------
-  'height.plane': R({ id: 'height.plane', value: 2, unit: '× distance', label: 'Height at any point ≤ 2 × horizontal distance to the far boundary of the nearest road', clause: 'Reg. 55 cl. 44; Ordinance cl. 49', source: 'Reg. translation', appliesTo: 'all' }),
+  'height.plane': R({ id: 'height.plane', value: 2, unit: '× distance', label: 'Height at any point ≤ 2 × horizontal distance to the far boundary of the nearest road (the planned far line where the plan widens the road, art. 36 ¶2)', clause: 'Reg. 55 cl. 44; Ordinance cl. 49', source: 'gazette', appliesTo: 'all', note: 'Cl. 44 ¶3 (added by Reg. 68, B.E. 2563): other structures standing on the roof are not counted in the height.' }),
 
   // ---- Open space -----------------------------------------------------------------------------
-  'os.reg33': R({ id: 'os.reg33', value: 0.3, unit: '× plot', label: 'Open land, residential high-rise / extra-large', clause: 'Reg. 33 cl. 6', source: 'Reg. translation', appliesTo: 'high-rise, extra-large' }),
+  'os.reg33': R({ id: 'os.reg33', value: 0.3, unit: '× plot', label: 'Open land, residential high-rise / extra-large', clause: 'Reg. 33 cl. 6', source: 'gazette', appliesTo: 'high-rise, extra-large' }),
   'os.ord52': R({ id: 'os.ord52', value: 0.3, unit: '× plot', label: 'Open land, residential building', clause: 'Ordinance cl. 52(1)', source: 'gazette', appliesTo: 'residential' }),
-  'os.reg55': R({ id: 'os.reg55', value: 0.3, unit: '× largest floor', label: 'Open space, residential', clause: 'Reg. 55 cl. 33', source: 'Reg. translation', appliesTo: 'residential' }),
+  'os.reg55': R({ id: 'os.reg55', value: 0.3, unit: '× largest floor', label: 'Open space, residential', clause: 'Reg. 55 cl. 33', source: 'gazette', appliesTo: 'residential' }),
 
   // ---- Parking --------------------------------------------------------------------------------
   'park.unit.threshold': R({ id: 'park.unit.threshold', value: 60, unit: 'm² per unit', label: 'Condo parking applies to units over 60 m²', clause: 'Reg. 7 cl. 2(3)', source: 'Reg. translation', appliesTo: 'condominium' }),
@@ -98,9 +101,9 @@ export const RULES = {
   'park.headroom': R({ id: 'park.headroom', value: 2.1, unit: 'm', label: 'Clear height in parking areas', clause: 'Reg. 41 cl. 4', source: 'Reg. translation', appliesTo: 'all' }),
 
   // ---- Units ----------------------------------------------------------------------------------
-  'unit.minArea': R({ id: 'unit.minArea', value: 20, unit: 'm²', label: 'Minimum unit area', clause: 'Reg. 55 cl. 19', source: 'Reg. translation', appliesTo: 'residential' }),
-  'unit.minF2F': R({ id: 'unit.minF2F', value: 2.6, unit: 'm', label: 'Minimum residential floor-to-floor', clause: 'Reg. 55 cl. 22', source: 'Reg. translation', appliesTo: 'residential' }),
-  'unit.corridor': R({ id: 'unit.corridor', value: 1.5, unit: 'm', label: 'Minimum common corridor width', clause: 'Reg. 55 cl. 21', source: 'Reg. translation', appliesTo: 'residential' }),
+  'unit.minArea': R({ id: 'unit.minArea', value: 20, unit: 'm²', label: 'Minimum unit area', clause: 'Reg. 55 cl. 19', source: 'gazette', appliesTo: 'residential' }),
+  'unit.minF2F': R({ id: 'unit.minF2F', value: 2.6, unit: 'm', label: 'Minimum residential floor-to-floor', clause: 'Reg. 55 cl. 22', source: 'gazette', appliesTo: 'residential' }),
+  'unit.corridor': R({ id: 'unit.corridor', value: 1.5, unit: 'm', label: 'Minimum common corridor width', clause: 'Reg. 55 cl. 21', source: 'gazette', appliesTo: 'residential' }),
 
   // ---- Environmental review (flag only) ------------------------------------------------------
   'eia.units': R({ id: 'eia.units', value: 80, unit: 'units', label: 'Environmental review: residential with 80+ units', clause: 'ONEP notification', source: 'assumed', appliesTo: 'residential', verified: false, note: 'Only secondary sources read. Shown as a note, never as pass/fail.' }),
@@ -108,7 +111,7 @@ export const RULES = {
 
   // ---- Tool assumptions -----------------------------------------------------------------------
   'a.parapet': R({ id: 'a.parapet', value: 1.2, unit: 'm', label: 'Parapet that must sit under the height plane', clause: '—', source: 'assumed', appliesTo: 'concepts' }),
-  'a.roofPlant': R({ id: 'a.roofPlant', value: 4, unit: 'm', label: 'Roof plant (lift overrun, tanks) over the core, checked against the plane', clause: '—', source: 'assumed', appliesTo: 'concepts' }),
+  'a.roofPlant': R({ id: 'a.roofPlant', value: 4, unit: 'm', label: 'Roof plant over the core (lift overrun, stair head), checked against the plane', clause: '—', source: 'assumed', appliesTo: 'concepts', note: 'Reg. 55 cl. 44 ¶3 exempts separate rooftop structures (tanks, masts); a lift overrun or stair head is part of the building, so the check stays, as a warning.' }),
   'a.roofPlantArea': R({ id: 'a.roofPlantArea', value: 60, unit: 'm²', label: 'Roof plant footprint over the core', clause: '—', source: 'assumed', appliesTo: 'concepts' }),
   'a.minPlate': R({ id: 'a.minPlate', value: 100, unit: 'm²', label: 'Smallest usable floor plate', clause: '—', source: 'assumed', appliesTo: 'concepts' }),
   'a.efficiency': R({ id: 'a.efficiency', value: 0.75, unit: '× residential floor area', label: 'Saleable share of residential floor area', clause: '—', source: 'assumed', appliesTo: 'unit count' }),
