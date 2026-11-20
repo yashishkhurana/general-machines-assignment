@@ -132,8 +132,12 @@ summary { cursor: pointer; font-weight: 600; margin-bottom: 6px; }
   @page { size: A4; margin: 12mm; }
   :root, :root[data-theme="dark"], :root:not([data-theme="light"]) { --bg: #fff; --panel: #fff; --fg: #000; --muted: #444; --line: #bbb; --chip: #f1f1f1; --accent: #1f4fb0; --pass: #13642f; --fail: #a32014; --warn: #8a5a00; --info: #333; color-scheme: light; }
   aside, header, .legend { background: #fff !important; color: #000; }
+  html, body, #root { height: auto !important; overflow: visible !important; }
   body { background: #fff; color: #000; }
   .app { display: block; height: auto; }
+  aside, .tabbody, .center { overflow: visible !important; height: auto !important; }
+  .legend { display: grid !important; }
+  .checks, .floors, .rules table { break-inside: auto; } tr { break-inside: avoid; }
   header .toolbar, .hint, aside.left, .tabs, .maplibregl-ctrl-top-right { display: none !important; }
   .center { height: auto; break-inside: avoid; }
   .map { display: none !important; }
