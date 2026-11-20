@@ -55,3 +55,33 @@ live only in `src/core/rules.ts`, each tagged gazette / Reg. translation / assum
 | G5 | **Simplification: the low-rise generator drops a floor or a basement, rather than redesigning, when the next one would take the total to 10,000 m² (extra-large).** Shown in the tool. | Brief item 10. |
 | G6 | Low-rise basements use the same plate as the ground floor. | Keeps the planted ground outside the basement footprint (§5). |
 | G7 | If the high-rise class is unavailable, concept A becomes a second low-rise layout with parking floors above ground. | §5. |
+| G8 | **The low-rise plate is the largest open space allows (1,400 m² on the fixture); the generator stacks floors on it and does not shrink it to squeeze in an extra floor.** It shrinks the plate only when one floor alone would break 10,000 m² or the permitted floor area (huge plots). Found while break-testing: a 1,250 m² plate gives **6 floors + 2 basements = 9,999 m² with 7,500 m² residential**, against 7,000 m² for the brief's 5 + 2. Kept 5 + 2 so the §8 fixture holds; the alternative is worth a designer's look. | Brief fixes the expected low-rise result. |
+| G9 | Existing OSM buildings whose centroid lies inside the plot are taken as demolished (drawn as dotted outlines). | Otherwise they hide the concepts. |
+| G10 | Basements are listed in the floor table but not drawn in 3D (fill-extrusion can't go below ground). | Rendering limit. |
+| G11 | Floors under 100 m², or that leave no room for the 4 m roof plant, stop the stack or warn; roof plant is a warning, not a fail. | Assumptions `a.minPlate`, `a.roofPlant`. |
+
+## Zone layer
+
+| # | Decision | Reason |
+|---|---|---|
+| Z1 | Shipped `src/data/zones.json`: 186 of the 498 features in `bkk-zoning-current.geojson` (all 69 ย.8–ย.10 features, plus every zone whose bounding box is within ~1.5 km of one). **124 sliver parts dropped** (≤ 4 distinct vertices and under 1,000 m²; most are ~0 ha). | Brief: "drop the 4-point ~0 ha slivers"; neighbours let the tool name the zone of a plot outside ย.8–ย.10. |
+| Z2 | A zone counts as present under the plot if it covers at least 0.5% of it. | The simplified boundaries leave hairline overlaps. |
+| Z3 | Plot area that falls in no zone polygon (gaps along roads and canals in the extract) is shared out in proportion to the zones present; a warning shows above 5%. | Gaps are an artefact of the extract. |
+| Z4 | Bangkok bounds for the "outside Bangkok" check: a generous box 100.32–100.94 E, 13.48–13.96 N. Outside the OSM site box the tool still computes (zone and rules) but has no neighbours or width estimates. | Tool limit. |
+
+## Site data (OSM)
+
+| # | Decision | Reason |
+|---|---|---|
+| D1 | OSM API 0.6 `map` call for bbox 100.5635–100.5775 E, 13.7285–13.7405 N, **downloaded 20 Nov 2026**, converted by `scripts/build-data.mjs` and committed as static GeoJSON. 1,754 buildings, 488 road ways. | Public Overpass was overloaded (research notes §6). |
+| D2 | **Height tags: 18 buildings (1.0%) have `height`, 70 more (4.0%) have only `building:levels`: 5.0% in all.** (The research session's wider bbox gave 2.2% / 7.6% of 4,702.) Levels × 3.0 m; otherwise 6 m assumed, drawn in a lighter tone. | Architecture §7. |
+| D3 | The tall buildings next to the plot already carry levels tags (Noble State 39: 36, Le Raffiné 39: 34, Grand 39 Tower: 30, The XXXIX: 32, Royal Castle: 17, 39 by Sansiri: 32, The Diplomat 39: 31). **Four more heights were hand-set from public listings** (floors × 3.0 m): Adelphi Grande, Soi 41: 20 floors (oyster.com, hotels.com); CNC Residence, Soi 33: 27 (fazwaz, nestopa, hipflat); The Bless Hotel & Residence, Soi 33: 8 (hotels.com, expedia, nestopa; tallest wing); Fuji Supermarket, Soi 33/1: 5 (travel guide; low confidence). No listing was found for "PSI Tower", "The Manor" (a mall at 32/1 Soi 39) or the former Banphaeo hospital building (branch closed 2016), so they stay at the assumed 6 m in the lighter tone. | §7 review option (c). Only counts stated in a source were used. |
+
+## Soi 39 example parcel and its current width
+
+| # | Decision | Reason |
+|---|---|---|
+| E1 | Example parcel: 40 m frontage × 50 m deep on the west side of Soi 39 (OSM way 156261446), 406–446 m north of Sukhumvit Road, mid-block, not a corner. It is a drawn test plot, not a surveyed land parcel. Zone ย.10 (detected; also the research session's finding). No sub-area number is stated: "ย.10-4" is unconfirmed. | Brief item 2. Picked where buildings face each other across the soi, so the building-gap bound exists. |
+| E2 | **Current-width default = 11.5 m, the building-gap upper bound, not a survey.** Method: perpendicular rays from the OSM centreline every 2 m over the frontage, ≤ 40 m each side, kept only where both sides hit a building outline; the value is the minimum gap (the tightest valid bound). Over the example frontage 4 of 21 rays hit both sides; median 16.7 m. The plot's front edge sits 5.75 m (half of 11.5) from the centreline (symmetric assumption). Lower bound (a): lanes=2 × 3.25 m = 6.5 m, no sidewalk tags. | Brief item 8. The right-of-way is at or below the gap; it is at least the carriageway. |
+| E3 | With 16 m planned and 11.5 m current, the widening strip is 2.25 m: plot 2,000 m² − 90 m² = **1,910 m²** for floor area. | W1–W2. |
+| E4 | The measure tool (c) gives a click-to-click distance over Esri World Imagery; the user decides whether it's a boundary-to-boundary width. The tool never fills it in itself. | Brief: don't invent a measured value. |

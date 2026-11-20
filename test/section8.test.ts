@@ -269,3 +269,11 @@ describe('break cases found while testing', () => {
     expect(mpArea(b.openSpace.groundPlate)).toBeCloseTo(1400, 0);
   });
 });
+
+describe('§6: height plane leaves no usable floor', () => {
+  it('shallow 40 × 10 m plot on a 0.5 m lane with a 12 m ground floor: < 100 m² clears the plane', () => {
+    const r = compute(input({ plot: [[0, 0], [40, 0], [40, 10], [0, 10]], roads: road(0.5), settings: S({ groundFloor: 12 }) }));
+    expect(r.messages.map((m) => m.code)).toContain('planeNoFloor');
+    expect(r.concepts.every((c) => !c.concept.ok)).toBe(true);
+  });
+});

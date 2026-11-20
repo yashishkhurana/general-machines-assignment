@@ -46,7 +46,7 @@ Stated limits, shown in the tool:
 - Hotel and office are not modelled. Clause 17 allows them in ย.10 with conditions.
 - Bonus clauses 53 and 54 are not offered. Both are written for public-building use.
 - Corner and two-road plots use the nearest-road rule (section 4.4). Clauses 45 and 46 may allow more height; the tool does not claim it.
-- Zone is a user input. No zoning map is shipped.
+- ~~Zone is a user input. No zoning map is shipped.~~ **Updated (build):** the zone is verified from a shipped zone layer (KNS.MAP extract of the 2556 plan map; ย.8–ย.10 plus neighbours, slivers dropped), labelled "approximate boundaries (simplified extract of the 2556 plan map): verify against BMA". A plot in one ย.8/ย.9/ย.10 polygon gets that zone; a straddling plot gets a warning naming both zones with the area in each, and floor area and the plan OSR are summed per part (the tool's assumption: the gazette has no straddle clause); outside ย.8–ย.10 gives "zone not supported" and no result. A typed zone overrides the layer and the mismatch is flagged. See `docs/decisions.md` B1–B2.
 - Road continuity (Regulation 33 clause 2) is a user tick-box.
 - Environmental review is a flag only.
 
@@ -304,7 +304,7 @@ Each case returns a clear message and leaves the page working:
 - Setbacks leave no buildable area.
 - Height plane leaves no usable floor.
 - Bonuses summing over 20% (clamped, with a note).
-- Plot straddling two zones (user is told the tool applies one zone to the whole plot).
+- Plot straddling two zones (user is told the tool applies one zone to the whole plot). **Updated (build):** now detected from the zone layer; the warning names both zones and the area in each, and floor area is summed per part.
 
 > **▸ Review, §6**
 > - **"Plot straddling two zones" can't be detected without a zone layer**, and §1 and §7 say none is shipped. Either ship the layer or drop this case.
@@ -321,7 +321,7 @@ Each case returns a clear message and leaves the page working:
 | Buildings and roads | OpenStreetMap, via the Geofabrik Thailand extract | Clipped to about 500 m round the site, saved as static GeoJSON in the repo |
 | Building heights | `height` tag, else `building:levels` × 3 m, else 6 m | Buildings with assumed heights are drawn in a lighter tone |
 | Basemap | Public vector tiles | If tiles fail, the static buildings and roads still draw |
-| Zoning | User input | The unlicensed KNS.MAP extract is used only to confirm the test plot's zone. It is not shipped. |
+| Zoning | ~~User input~~ **Updated (build):** KNS.MAP extract (Kanesuan), `bkk-zoning-current.geojson` | Shipped as `src/data/zones.json`: every ย.8–ย.10 polygon plus zones within ~1.5 km, 4-point ~0 ha slivers dropped. Looked up from the drawn plot. Credited in the app and README. |
 
 OpenStreetMap is credited on the map as "© OpenStreetMap contributors".
 

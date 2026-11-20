@@ -229,9 +229,12 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
     lastFp = fp;
     if (fp.area < rule('a.minPlate')) break;
     const maxK = mode === 'basement' ? 4 : N - 1;
+    // the plate is the largest open space allows; it is only shrunk when one such floor alone would break
+    // the 10,000 m² low-rise limit or the permitted floor area (huge plots)
+    const fullPlate = Math.min(fp.area, site.netArea * (1 - rule('os.ord52')), site.netArea / (1 + rule('os.reg55')));
     for (let K = 0; K <= maxK; K++) {
       const storeysTotal = mode === 'basement' ? N + K : N;
-      const capArea = Math.min(fp.area, site.netArea * (1 - rule('os.ord52')), site.netArea / (1 + rule('os.reg55')), site.netArea / (1 + osr * storeysTotal));
+      const capArea = Math.min(fp.area, site.netArea * (1 - rule('os.ord52')), site.netArea / (1 + rule('os.reg55')), site.netArea / (1 + osr * storeysTotal), fullPlate >= xl ? (xl - 1) / storeysTotal : Infinity, fullPlate > permitted ? permitted / storeysTotal : Infinity);
       const key = `${fp.area.toFixed(2)}|${capArea.toFixed(1)}`;
       if (!trimCache.has(key)) trimCache.set(key, trimToArea(site, fp.mp, capArea));
       const plate0 = trimCache.get(key)!;
