@@ -1,0 +1,13 @@
+# secrets — never commit
+.env
+.env.*
+*.key
+*.pem
+access-key*
+ACCESS_KEY*
+secrets/
+# deps / build
+node_modules/
+dist/
+.vercel/
+.DS_Store
