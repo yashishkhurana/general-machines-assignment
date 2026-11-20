@@ -18,7 +18,7 @@ export function normaliseRing(plot: Ring) {
   return { ring, mapEdge, isCW };
 }
 
-export function buildSite(plot: Ring, roadInputs: RoadEdgeInput[]): Site {
+export function buildSite(plot: Ring, roadInputs: RoadEdgeInput[], heightTo: 'current' | 'planned' = 'current'): Site {
   const { ring, mapEdge } = normaliseRing(plot);
   const n = ring.length;
   const plotMP = toMP(ring);
@@ -32,14 +32,16 @@ export function buildSite(plot: Ring, roadInputs: RoadEdgeInput[]): Site {
       const width = Math.max(r.width, current);
       const strip = Math.max(0, (r.width - current) / 2); // symmetric widening about the centreline (assumption)
       const [nearA, nearB] = offsetRight(a, b, -strip);
-      // Height plane (Reg. 55 cl. 44) is measured to the far boundary of the PLANNED right-of-way: plan art. 36 ¶2
-      // makes the planned line the road line "for building lines and distances" under building-control law, and
-      // the plane is a distance rule (brief item 8; decisions W3). The current far boundary is kept for the
-      // sensitivity figure shown beside it. Access (Reg. 33 cl. 2) is a road-width rule, tested on the current width.
-      const [farA, farB] = offsetRight(a, b, current + strip, FAR_EXTENSION);
-      const [farNowA, farNowB] = offsetRight(a, b, current, FAR_EXTENSION);
+      // Height plane (Reg. 55 cl. 44) far boundary. Default: the road as it is now (current edge + current width),
+      // the strict reading. Option: the planned far line, if plan art. 36 ¶2 ("building lines and the various
+      // distances") is read to cover the plane. Both are computed; the other one is shown as the alternative
+      // (decisions W3). Access (Reg. 33 cl. 2, a width rule) is always tested on the current width.
+      const planned = offsetRight(a, b, current + strip, FAR_EXTENSION);
+      const now = offsetRight(a, b, current, FAR_EXTENSION);
+      const [farA, farB] = heightTo === 'planned' ? planned : now;
+      const [farAltA, farAltB] = heightTo === 'planned' ? now : planned;
       const [centreA, centreB] = offsetRight(a, b, current / 2);
-      return { edge, inputEdge: r.edge, a, b, width, current, strip, frontage: dist(a, b), nearA, nearB, farA, farB, farNowA, farNowB, centreA, centreB };
+      return { edge, inputEdge: r.edge, a, b, width, current, strip, frontage: dist(a, b), nearA, nearB, farA, farB, farAltA, farAltB, centreA, centreB };
     });
   const strips = roads
     .filter((r) => r.strip > 0)

@@ -2,7 +2,7 @@
 import { availability, type Availability } from './classify';
 import { checklist, type CheckItem } from './checklist';
 import { conceptLowRise, conceptTower, type Concept } from './concepts';
-import { planeHeightNowAt, planeRange } from './envelope';
+import { planeHeightAltAt, planeRange } from './envelope';
 import { highRiseFootprint, lowRiseFootprint, type Footprint } from './footprint';
 import { floorArea, resolveZone, type FloorAreaResult, type ZoneResult } from './metrics';
 import { buildSite } from './site';
@@ -17,7 +17,7 @@ export interface Results {
   far: FloorAreaResult | null;
   avail: Availability | null;
   footprints: { highRise: Footprint; lowRise: Footprint } | null;
-  plane: { atHighRiseFront: number; atLowRiseFront: number; atHighRiseFrontNow: number } | null;
+  plane: { atHighRiseFront: number; atLowRiseFront: number; atHighRiseFrontAlt: number; heightTo: 'current' | 'planned' } | null;
   concepts: { concept: Concept; checks: CheckItem[] }[];
 }
 
@@ -33,7 +33,7 @@ export function compute(input: SiteInput): Results {
     const roadMsgs = validateRoads(input.plot, input.roads);
     messages.push(...roadMsgs, ...validateSettings(input.settings));
     const roadsOk = !roadMsgs.some((m) => m.level === 'error');
-    const site = buildSite(input.plot, roadsOk ? input.roads : []);
+    const site = buildSite(input.plot, roadsOk ? input.roads : [], input.settings.heightTo ?? 'current');
     // the zone is looked up even when the inputs aren't complete yet, so the panel can show it
     const zone = resolveZone(site, input.zones, input.zoneOverride);
     if (messages.some((m) => m.level === 'error')) return empty([...messages, ...zone.messages.filter((m) => m.level !== 'error')], site, zone);
@@ -50,8 +50,8 @@ export function compute(input: SiteInput): Results {
     const highRise = highRiseFootprint(site);
     const lowRise = lowRiseFootprint(site, 7, 22.4);
     const pr = (fp: Footprint) => (fp.area > 0 ? planeRange(site, fp.mp).min : 0);
-    const prNow = (fp: Footprint) => (fp.area > 0 ? Math.min(...fp.mp.flatMap((poly) => poly[0].map((p) => planeHeightNowAt(site, p)))) : 0);
-    const plane = { atHighRiseFront: pr(highRise), atLowRiseFront: pr(lowRise), atHighRiseFrontNow: prNow(highRise) };
+    const prAlt = (fp: Footprint) => (fp.area > 0 ? Math.min(...fp.mp.flatMap((poly) => poly[0].map((p) => planeHeightAltAt(site, p)))) : 0);
+    const plane = { atHighRiseFront: pr(highRise), atLowRiseFront: pr(lowRise), atHighRiseFrontAlt: prAlt(highRise), heightTo: input.settings.heightTo ?? 'current' };
     if (lowRise.area < 1) messages.push({ level: 'warn', code: 'noBuildable', text: 'Setbacks leave no buildable area for a low-rise building.' });
     if (highRise.area < 1) messages.push({ level: 'warn', code: 'noBuildableHR', text: 'High-rise setbacks (6 m all round) leave no buildable area.' });
 

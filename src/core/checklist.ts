@@ -95,7 +95,7 @@ export function checklist(c: Concept, site: Site, avail: Availability, s: Settin
   push({ id: 'plantedC', label: 'Stricter reading: half of the open space actually provided', status: os.plantedCapacity >= os.plantedC - 1e-6 ? 'pass' : 'warn', required: `${n0(os.plantedC)} m²`, provided: `${n0(os.plantedCapacity)} m² available`, clause: 'Plan arts. 15–17 (reading c, warning only)', rules: ['planted.share'] });
 
   const p = c.parking;
-  push({ id: 'parking', label: `Parking: ${p.basis === 'per unit' ? '1 per unit over 60 m²' : '1 per 120 m² of total floor area (large building)'}`, status: pf(p.provided >= p.needed), required: `${p.needed} spaces (per unit ${p.perUnit}, per 120 m² ${p.per120})`, provided: `${p.provided} spaces at ${n1(p.areaPerSpace)} m² each`, clause: 'Reg. 7 cl. 3(1)(C), (H); Reg. 41 cl. 2', rules: ['park.perUnit', 'park.large.divisor', 'park.stall.w', 'park.stall.l'] });
+  push({ id: 'parking', label: `Parking: ${p.basis === 'per unit' ? '1 per unit over 60 m²' : '1 per 120 m² of total floor area (large building)'}`, status: pf(p.provided >= p.needed), required: `${p.needed} spaces (per unit ${p.perUnit}, per 120 m² ${p.per120})`, provided: `${p.provided} spaces at ${n1(p.areaPerSpace)} m² each`, clause: 'Reg. 7 cl. 3(1)(C), (H); Reg. 41 cl. 2 (old English translation only)', rules: ['park.perUnit', 'park.large.divisor', 'park.stall.w', 'park.stall.l'] });
 
   const ground = os.groundPlate;
   if (ground.length && site.roads.length) {

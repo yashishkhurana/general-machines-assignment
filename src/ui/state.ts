@@ -50,6 +50,7 @@ export function encodeState(s: AppState): string {
     c: st.roadContinuity ? 1 : 0,
     h: [st.groundFloor, st.floorToFloor],
     k: st.parkingAreaPerSpace ?? 0,
+    t: st.heightTo === 'planned' ? 1 : 0,
     u: [st.avgUnitArea, st.shareOver60],
     v: [s.view.satellite ? 1 : 0, s.view.envelope, s.view.concept, s.view.buildings ? 1 : 0, s.view.zones ? 1 : 0, s.view.rays ? 1 : 0],
   };
@@ -72,6 +73,7 @@ export function decodeState(hash: string): AppState | null {
       groundFloor: num(o.h?.[0], d.groundFloor),
       floorToFloor: num(o.h?.[1], d.floorToFloor),
       parkingAreaPerSpace: num(o.k, 0) > 0 ? num(o.k, 0) : null,
+      heightTo: o.t === 1 ? 'planned' : 'current',
       avgUnitArea: num(o.u?.[0], d.avgUnitArea),
       shareOver60: num(o.u?.[1], d.shareOver60),
     };

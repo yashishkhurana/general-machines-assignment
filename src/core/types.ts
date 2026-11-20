@@ -22,6 +22,9 @@ export interface Settings {
   groundFloor: number; // m, ground floor-to-floor
   floorToFloor: number; // m, typical floor-to-floor
   parkingAreaPerSpace: number | null; // m² gross per space; null = derived from Reg. 41 + allowance
+  /** Height plane (Reg. 55 cl. 44) on a road to be widened: measured to the road's current far boundary (strict,
+   *  default) or to the planned far line under plan art. 36 ¶2. */
+  heightTo: 'current' | 'planned';
   avgUnitArea: number; // m², saleable
   shareOver60: number; // 0-1, share of units over 60 m² (Reg. 7 cl. 2(3))
 }
@@ -60,10 +63,10 @@ export interface Road {
   frontage: number;
   nearA: Pt; // planned road boundary (legal line)
   nearB: Pt;
-  farA: Pt; // far boundary of the planned right-of-way, extended along the road (height plane)
+  farA: Pt; // far boundary the height plane is measured to (per Settings.heightTo), extended along the road
   farB: Pt;
-  farNowA: Pt; // far boundary of the road as it is now (sensitivity figure only)
-  farNowB: Pt;
+  farAltA: Pt; // the other reading's far boundary (shown as the alternative figure)
+  farAltB: Pt;
   centreA: Pt;
   centreB: Pt;
 }
@@ -86,6 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
   groundFloor: 4.0,
   floorToFloor: 3.2,
   parkingAreaPerSpace: null,
+  heightTo: 'current',
   avgUnitArea: 50,
   shareOver60: 0.25,
 };

@@ -141,6 +141,14 @@ export function InputsPanel(p: {
           );
         })}
         <label className="check"><input type="checkbox" checked={s.roadContinuity} onChange={(e) => set({ roadContinuity: e.target.checked })} /> Road continues at this width to another public road (Reg. 33 cl. 2)</label>
+        <label className="field" htmlFor="heightTo">
+          <span>Measure the height plane to</span>
+          <select id="heightTo" value={s.heightTo} onChange={(e) => set({ heightTo: e.target.value as Settings['heightTo'] })}>
+            <option value="current">Current far boundary of the road (strict, default)</option>
+            <option value="planned">Planned far line under art. 36 ¶2</option>
+          </select>
+          <small>Only matters where the road is to be widened. Art. 36 ¶2 may extend the planned line to "the various distances", but its reach for a ย.10 condo isn't certain, and the road isn't widened yet. The summary shows both figures.</small>
+        </label>
       </section>
 
       <section>
@@ -326,7 +334,7 @@ export function Summary({ results }: { results: Results }) {
           <dt>Plan open space</dt><dd>{pc(far.osrWeighted)} of floor area, half planted</dd></>}
         {avail && <><dt>High-rise / extra-large</dt><dd>{avail.highRise ? 'available' : `unavailable: ${avail.reasons.join(' ')}`}</dd></>}
         {footprints && <><dt>Footprints</dt><dd>high-rise {n0(footprints.highRise.area)} m² · low-rise {n0(footprints.lowRise.area)} m²</dd></>}
-        {plane && footprints && footprints.highRise.area > 0 && <><dt>Height plane</dt><dd>{n1(plane.atHighRiseFront)} m at the high-rise front line, rising 2 m per metre back{Math.abs(plane.atHighRiseFrontNow - plane.atHighRiseFront) > 0.05 ? `. Measured to the planned far boundary (art. 36 ¶2); to the road's current far boundary it would be ${n1(plane.atHighRiseFrontNow)} m` : ''}</dd></>}
+        {plane && footprints && footprints.highRise.area > 0 && <><dt>Height plane</dt><dd>{n1(plane.atHighRiseFront)} m at the high-rise front line, rising 2 m per metre back{Math.abs(plane.atHighRiseFrontAlt - plane.atHighRiseFront) > 0.05 ? (plane.heightTo === 'current' ? `. Measured to the road's current far boundary (strict default); to the planned line under art. 36 ¶2 it would be ${n1(plane.atHighRiseFrontAlt)} m` : `. Measured to the planned far line (art. 36 ¶2); to the road's current far boundary it would be ${n1(plane.atHighRiseFrontAlt)} m`) : ''}</dd></>}
         {site.roads.map((r) => <Fragment key={r.edge}><dt>Road, edge {r.inputEdge + 1}</dt><dd>{n1(r.width)} m legal, {n1(r.current)} m current, frontage {n1(r.frontage)} m{r.strip > 0 ? `, strip ${n1(r.strip)} m` : ''}</dd></Fragment>)}
       </dl>
     </section>
@@ -348,7 +356,7 @@ export function RulesPanel({ used }: { used: Set<string> }) {
   const all = Object.values(RULES) as Rule[];
   return (
     <div className="rules">
-      <p className="muted">Every rule was read through a third-party copy. <b>gazette</b>: the Thai text in the Association of Siamese Architects' (ASA) PDF copies (the plan, the Ordinance, and ASA's consolidated texts of Reg. 33 and Reg. 55 with amendments). <b>Reg. translation</b>: only the IIBH English translation (Reg. 7, Reg. 41), not the Thai text. <b>assumed</b>: this tool's assumption.</p>
+      <p className="muted">Every rule was read through a third-party copy. <b>gazette</b>: the Thai text in the Association of Siamese Architects' (ASA) PDF copies (the plan, the Ordinance, and ASA's consolidated texts of Reg. 33 and Reg. 55 with amendments). <b>Reg. translation</b>: only the IIBH English translation (Reg. 7, Reg. 41), not the Thai text. <b>The parking rules are the only ones still resting on the old translation alone.</b> <b>assumed</b>: this tool's assumption.</p>
       {groups.map(([g, f]) => (
         <details key={g} open={g !== 'Assumptions and tool limits'}>
           <summary>{g}</summary>
@@ -382,6 +390,7 @@ export function Limits() {
         <li>The current road width is an estimate; the legal right-of-way needs the land-office parcel map or a survey.</li>
         <li>Simplification: the low-rise generator drops a floor rather than redesigning when the next floor would make it extra-large.</li>
         <li>Environmental review is a flag only; its trigger wording is unverified.</li>
+        <li>The parking count (Reg. 7) and stall sizes (Reg. 41) rest only on an old English translation (IIBH); the Thai text hasn't been checked.</li>
         <li>Building heights: {META.osm.sharePctEither}% of the {n0(META.osm.buildings)} OSM buildings here carry a height or levels tag ({META.extracted}); {META.osm.manual} more are hand-set (sourced listing or visual estimate, shown in their own colours); the rest are drawn at an assumed {META.osm.defaultHeightM} m in a lighter tone.</li>
       </ul>
     </section>

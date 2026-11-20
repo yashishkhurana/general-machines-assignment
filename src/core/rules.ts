@@ -61,7 +61,7 @@ export const RULES = {
   'access.big.area': R({ id: 'access.big.area', value: 30000, unit: 'm²', label: 'Floor area above which an 18 m road is needed', clause: 'Reg. 33 cl. 2', source: 'gazette', appliesTo: 'high-rise, extra-large' }),
 
   // ---- Setbacks ---------------------------------------------------------------------------------
-  'hr.setback': R({ id: 'hr.setback', value: 6, unit: 'm', label: 'High-rise: every part above and below ground from boundary and road', clause: 'Reg. 33 cl. 4', source: 'gazette', appliesTo: 'high-rise, extra-large' }),
+  'hr.setback': R({ id: 'hr.setback', value: 6, unit: 'm', label: 'High-rise: every part above and below ground from boundary and road (foundations are exempt; the tool applies 6 m to the whole footprint, which is stricter)', clause: 'Reg. 33 cl. 4', source: 'gazette', appliesTo: 'high-rise, extra-large' }),
   'hr.fireRoad': R({ id: 'hr.fireRoad', value: 6, unit: 'm', label: 'Fire-engine road with a traffic surface at least 6 m wide, unroofed, all round the building', clause: 'Reg. 33 cl. 3 (as amended by Reg. 50)', source: 'gazette', appliesTo: 'high-rise, extra-large', note: 'The Thai text requires a road surface (the IIBH translation\'s "road or open space" is the older wording). Where a widening line applies, its width counts from that line (cl. 3 ¶3). Modelled as a paved 6 m ring inside the planned line.' }),
   'front.narrow.road': R({ id: 'front.narrow.road', value: 6, unit: 'm', label: 'Road under 6 m: building line 3 m from centreline', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'gazette', appliesTo: 'all' }),
   'front.narrow.dist': R({ id: 'front.narrow.dist', value: 3, unit: 'm from centreline', label: 'Building line on a road under 6 m', clause: 'Reg. 55 cl. 41; Ordinance cl. 50', source: 'gazette', appliesTo: 'all' }),
@@ -83,7 +83,7 @@ export const RULES = {
   'face.within': R({ id: 'face.within', value: 20, unit: 'm', label: 'Road-side face within 20 m of the road', clause: 'Ordinance cl. 53', source: 'gazette', appliesTo: 'building on a public way' }),
 
   // ---- Height ---------------------------------------------------------------------------------
-  'height.plane': R({ id: 'height.plane', value: 2, unit: '× distance', label: 'Height at any point ≤ 2 × horizontal distance to the far boundary of the nearest road (the planned far line where the plan widens the road, art. 36 ¶2)', clause: 'Reg. 55 cl. 44; Ordinance cl. 49', source: 'gazette', appliesTo: 'all', note: 'Cl. 44 ¶3 (added by Reg. 68, B.E. 2563): other structures standing on the roof are not counted in the height.' }),
+  'height.plane': R({ id: 'height.plane', value: 2, unit: '× distance', label: 'Height at any point ≤ 2 × horizontal distance to the far boundary of the nearest road (default: the road as it is now; option: the planned far line under art. 36 ¶2)', clause: 'Reg. 55 cl. 44; Ordinance cl. 49', source: 'gazette', appliesTo: 'all', note: 'Cl. 44 ¶3 (added by Reg. 68, B.E. 2563): other structures standing on the roof are not counted in the height.' }),
 
   // ---- Open space -----------------------------------------------------------------------------
   'os.reg33': R({ id: 'os.reg33', value: 0.3, unit: '× plot', label: 'Open land, residential high-rise / extra-large', clause: 'Reg. 33 cl. 6', source: 'gazette', appliesTo: 'high-rise, extra-large' }),
