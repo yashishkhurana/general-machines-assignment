@@ -1,7 +1,5 @@
 # Architecture: Bangkok plot envelope tool
 
-Status: plan, written Friday 20 Nov 2026. Deadline Sunday 22 Nov, 18:53 IST. Feature freeze Sunday 12:00.
-
 > **Review, 20 Nov (AI-assisted).** Every point below was checked against the sources in `docs/research-notes.md`:
 > - the Royal Gazette text of the 2556 plan, read directly
 > - the English translation of Ministerial Regulations 7, 33 and 55
@@ -70,14 +68,14 @@ Stated limits, shown in the tool:
 
 - Vite, TypeScript, React.
 - MapLibre GL for the map and plot drawing.
-- deck.gl over MapLibre for the envelope, concepts and neighbouring buildings. Fallback if the sloped mesh takes more than an hour: a separate three.js view in local metres beside the map.
+- deck.gl over MapLibre for the envelope, concepts and neighbouring buildings. Fallback if the sloped mesh proves too slow to build: a separate three.js view in local metres beside the map.
 - Geometry as pure functions in local metres (UTM zone 47N via proj4). Polygon operations with turf and polygon-clipping.
 - Vitest for the numbers.
 - Deployed on Vercel from `main`.
 
 > **▸ Review, §2**
 > - **deck.gl's polygon layers can't draw a sloped top.** The envelope under the 2×-road plane is a sloped surface, so it needs a custom mesh either way. Pick one renderer now:
->   - three.js as a MapLibre custom layer (an official MapLibre example) handles envelope, concepts and neighbours in one scene, with no "fallback" hour
+>   - three.js as a MapLibre custom layer (an official MapLibre example) handles envelope, concepts and neighbours in one scene, with no separate fallback view
 >   - deck.gl `SimpleMeshLayer` also works
 > - **UTM 47N is right** for Bangkok (96–102°E).
 > - **Name the basemap.** "Public vector tiles" isn't a decision. OpenFreeMap needs no key. MapTiler and Stadia need keys and have quotas.
@@ -385,7 +383,7 @@ Written and passing before any 3D work. Fixture: a 40 × 50 m rectangle, 40 m si
 5. Concepts A and B with floor tables.
 6. Break-testing, performance, visual polish.
 
-Push to `main` as each step works so the live link always shows a working version. Submit a first version at the Sunday noon freeze, then resubmit the final one.
+Push to `main` as each step works so the live link always shows a working version.
 
 ## 10. Open items
 
