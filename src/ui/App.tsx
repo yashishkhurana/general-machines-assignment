@@ -48,6 +48,16 @@ export function App() {
     return out;
   }, [state.ring]);
 
+  // a pasted share link (hash change without reload) replaces the case
+  useEffect(() => {
+    const onHash = () => {
+      const next = decodeState(location.hash);
+      if (next) { setState(next); setMeasure([]); setFitKey(String(Date.now())); }
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
   // inputs live in the URL
   useEffect(() => {
     const t = setTimeout(() => history.replaceState(null, '', '#' + encodeState(state)), 250);
