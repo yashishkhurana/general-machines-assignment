@@ -23,7 +23,7 @@ export interface AppState {
   view: ViewState;
 }
 
-export const DEFAULT_VIEW: ViewState = { satellite: false, envelope: 'highRise', concept: 'A', buildings: true, zones: true, rays: true };
+export const DEFAULT_VIEW: ViewState = { satellite: false, envelope: 'highRise', concept: 'A', buildings: true, zones: false, rays: false };
 
 export function exampleState(): AppState {
   const ex = soi39Example();
@@ -57,11 +57,23 @@ export function encodeState(s: AppState): string {
   return 'c=' + encodeURIComponent(JSON.stringify(o));
 }
 
+/** A share link: none in the URL, read, or present but unreadable (truncated, garbage, bad corners). */
+export type Decoded = { status: 'none' } | { status: 'ok'; state: AppState } | { status: 'invalid' };
+
+export function readLink(hash: string): Decoded {
+  if (!/(?:^#?|&)c=/.test(hash)) return { status: 'none' };
+  const st = decodeState(hash);
+  return st ? { status: 'ok', state: st } : { status: 'invalid' };
+}
+
 export function decodeState(hash: string): AppState | null {
   try {
     const m = /(?:^#?|&)c=([^&]+)/.exec(hash);
     if (!m) return null;
     const o = JSON.parse(decodeURIComponent(m[1]));
+    if (!o || typeof o !== 'object' || !Array.isArray(o.p) || o.p.length < 6 || o.p.length % 2 !== 0) return null;
+    if (o.p.some((x: unknown) => typeof x !== 'number' || !Number.isFinite(x))) return null;
+    if (o.e !== undefined && (!Array.isArray(o.e) || o.e.some((e: unknown) => !Array.isArray(e) || e.length < 3 || e.some((x) => typeof x !== 'number' || !Number.isFinite(x))))) return null;
     const num = (x: unknown, d: number) => (typeof x === 'number' && Number.isFinite(x) ? x : d);
     const ring: LL[] = [];
     for (let i = 0; i + 1 < (o.p ?? []).length; i += 2) ring.push([num(o.p[i], NaN), num(o.p[i + 1], NaN)]);
@@ -127,7 +139,16 @@ export function remapRoads(oldRing: LL[], newRing: LL[], roads: RoadEdgeInput[])
   });
 }
 
+/** True when every input matches the example: plot, road edges, zone override and settings (not the view). */
 export function isExample(s: AppState): boolean {
-  const ex = soi39Example();
-  return s.ring.length === ex.ring.length && s.ring.every((p, i) => Math.abs(p[0] - ex.ring[i][0]) < 1e-9 && Math.abs(p[1] - ex.ring[i][1]) < 1e-9);
+  const ex = exampleState();
+  const sameRing = s.ring.length === ex.ring.length && s.ring.every((p, i) => Math.abs(p[0] - ex.ring[i][0]) < 1e-9 && Math.abs(p[1] - ex.ring[i][1]) < 1e-9);
+  return sameRing && canon(s.roads) === canon(ex.roads) && s.zoneOverride === ex.zoneOverride && canon(s.settings) === canon(ex.settings);
+}
+
+/** JSON with sorted keys, so two equal objects compare equal whatever order their keys were set in. */
+function canon(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canon).join(',')}]`;
+  if (v && typeof v === 'object') return `{${Object.keys(v as object).sort().map((k) => `${JSON.stringify(k)}:${canon((v as Record<string, unknown>)[k])}`).join(',')}}`;
+  return JSON.stringify(v);
 }

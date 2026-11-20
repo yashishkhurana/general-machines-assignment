@@ -2,6 +2,7 @@
 import type { Availability } from './classify';
 import type { Concept } from './concepts';
 import { dist, mpPerimeter, pointSegDist, type MultiPoly } from './geom';
+import { fmtVs } from './format';
 import { RULES, rule, type RuleId } from './rules';
 import type { Settings, Site } from './types';
 
@@ -58,7 +59,7 @@ export function checklist(c: Concept, site: Site, avail: Availability, s: Settin
   push({ id: 'far', label: 'Total floor area within the permitted floor area', status: pf(c.total <= permitted + 1e-6), required: `≤ ${n0(permitted)} m²`, provided: `${n0(c.total)} m² (parking ${n0(c.parkingArea)} m² included)`, clause: 'Plan arts. 15–17, 57', rules: ['far.y10', 'bonus.cap'] });
 
   if (kind === 'tower') {
-    push({ id: 'access', label: 'High-rise / extra-large access: 12 m frontage on a road ≥ 10 m, continuing to another road', status: pf(avail.highRise), required: '≥ 12 m frontage, ≥ 10 m right-of-way, continuity', provided: avail.highRise ? `${n1(avail.accessFrontage)} m frontage, ${n1(avail.accessRoadCurrent)} m current right-of-way` : avail.reasons.join(' '), clause: 'Reg. 33 cl. 2', rules: ['access.frontage', 'access.road'] });
+    push({ id: 'access', label: 'High-rise / extra-large access: 12 m frontage on a road ≥ 10 m, continuing to another road', status: pf(avail.highRise), required: '≥ 12 m frontage, ≥ 10 m right-of-way, continuity', provided: avail.highRise ? `${fmtVs(avail.accessFrontage, rule('access.frontage'))} m frontage, ${fmtVs(avail.accessRoadCurrent, rule('access.road'))} m current right-of-way` : avail.reasons.join(' '), clause: 'Reg. 33 cl. 2', rules: ['access.frontage', 'access.road'] });
     if (c.total > rule('access.big.area')) push({ id: 'access18', label: 'Over 30,000 m²: road at least 18 m', status: pf(avail.accessRoadCurrent >= rule('access.road.big')), required: '≥ 18 m', provided: `${n1(avail.accessRoadCurrent)} m`, clause: 'Reg. 33 cl. 2', rules: ['access.road.big'] });
     push({ id: 'fireStrip', label: 'The 12 m frontage strip stays open up to the building as a fire-engine entrance', status: 'info', required: 'kept clear', provided: 'the 6 m ring and frontage are left clear in this concept', clause: 'Reg. 33 cl. 2 ¶3', rules: ['access.frontage'] });
     push({ id: 'setback6', label: 'Every part above and below ground ≥ 6 m from the boundary and the road', status: 'pass', required: '≥ 6 m', provided: 'footprint cut 6 m in from every edge (road edges from the planned line)', clause: 'Reg. 33 cl. 4', rules: ['hr.setback'] });

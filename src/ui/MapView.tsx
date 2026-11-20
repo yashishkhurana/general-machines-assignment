@@ -20,10 +20,12 @@ maplibregl.setWorkerUrl(workerUrl);
 const DEFAULT_BEARING = -110;
 const DEFAULT_PITCH = 55;
 
+// Colour by meaning only: neutral context, drafting blue for the permitted envelope, the plan's brown for
+// residential, pale tan for parking, red for the road edge.
 export const COLORS = {
-  plot: '#1d1f22', road: '#d1352b', strip: '#d1352b', fpHigh: '#2f6fdf', fpLow: '#1f9e8f',
-  envHigh: '#2f6fdf', envLow: '#1f9e8f', residential: '#e8833a', parking: '#7a64b8', fire: '#9aa3ad',
-  bldKnown: '#8a9099', bldListing: '#5f7fa6', bldVisual: '#a8875a', bldAssumed: '#cfd3d8', rays: '#7b3fbf', measure: '#e0a100',
+  plot: '#17242D', road: '#B93A2B', strip: '#B93A2B', fpHigh: '#56646D', fpLow: '#56646D',
+  envHigh: '#1F55C8', envLow: '#1F55C8', residential: '#9A6A4B', parking: '#D8C7B6', fire: '#C9CEC6',
+  building: '#F7F8F5', ground: '#EEF0EC', rays: '#7b3fbf', measure: '#C27A00',
 };
 const ZONE_FILL: Record<string, string> = {
   residential_low: '#f3dc6b', residential_medium: '#f0a35b', residential_high: '#a86f3d', commercial: '#d9484a',
@@ -55,6 +57,7 @@ export interface MapProps {
   onMeasure: (pts: LL[]) => void;
   onToolDone: () => void;
   fitKey: string;
+  roadName?: string;
 }
 
 export function MapView(p: MapProps) {
@@ -67,6 +70,7 @@ export function MapView(p: MapProps) {
   const suppress = useRef(false);
   const props = useRef(p);
   props.current = p;
+  const callouts = useRef<Record<'height' | 'road' | 'clear', maplibregl.Marker> | null>(null);
 
   // ---- init once -------------------------------------------------------------------------------
   useEffect(() => {
@@ -84,44 +88,76 @@ export function MapView(p: MapProps) {
       const ring = props.current.state.ring;
       const c = ring.length ? ring.reduce((a, b) => [a[0] + b[0] / ring.length, a[1] + b[1] / ring.length], [0, 0]) : [100.5711, 13.7338];
       const map = new maplibregl.Map({
-        container: el.current, style, center: c as LL, zoom: el.current.clientWidth < 600 ? 17.3 : 17.9, pitch: DEFAULT_PITCH, bearing: DEFAULT_BEARING, maxPitch: 75,
+        container: el.current, style, center: c as LL, zoom: el.current.clientWidth < 600 ? 16.7 : 17.9, pitch: DEFAULT_PITCH, bearing: DEFAULT_BEARING, maxPitch: 75,
         attributionControl: false, canvasContextAttributes: { preserveDrawingBuffer: true, antialias: true },
       } as any);
       mapRef.current = map;
       (window as any).__map = map;
-      map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+      map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showCompass: false }), 'top-right');
       map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
-      map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: ['© OpenStreetMap contributors', 'Zones: Kanesuan/KNS.MAP extract of the 2556 plan map'] }), 'bottom-right');
+      map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: ['© OpenStreetMap contributors', 'Zones: Kanesuan/KNS.MAP extract of the 2556 plan map'] }), 'bottom-right');
       map.on('load', () => {
         if (cancelled) return;
         // basemap building layers would double up with ours
-        for (const l of (map.getStyle().layers ?? []) as { id: string }[]) if (/building/i.test(l.id)) map.setLayoutProperty(l.id, 'visibility', 'none');
+        for (const l of (map.getStyle().layers ?? []) as { id: string; type: string }[]) {
+          if (/building|poi|aeroway|housenumber/i.test(l.id)) map.setLayoutProperty(l.id, 'visibility', 'none');
+          if (l.type === 'background') map.setPaintProperty(l.id, 'background-color', COLORS.ground);
+        }
         const firstSymbol = map.getStyle().layers?.find((l) => l.type === 'symbol')?.id;
         map.addSource('esri', { type: 'raster', tiles: [ESRI], tileSize: 256, maxzoom: 19, attribution: ESRI_ATTR });
         map.addLayer({ id: 'esri', type: 'raster', source: 'esri', layout: { visibility: 'none' } }, firstSymbol);
         map.addSource('zones', { type: 'geojson', data: ZONES as any });
-        map.addLayer({ id: 'zones-fill', type: 'fill', source: 'zones', paint: { 'fill-color': ['match', ['get', 'category'], ...Object.entries(ZONE_FILL).flat(), '#bbbbbb'] as any, 'fill-opacity': 0.16 } }, firstSymbol);
+        map.addLayer({ id: 'zones-fill', type: 'fill', source: 'zones', paint: { 'fill-color': ['match', ['get', 'category'], ...Object.entries(ZONE_FILL).flat(), '#bbbbbb'] as any, 'fill-opacity': 0.12 } }, firstSymbol);
         map.addLayer({ id: 'zones-line', type: 'line', source: 'zones', paint: { 'line-color': ['match', ['get', 'category'], ...Object.entries(ZONE_FILL).flat(), '#999'] as any, 'line-width': 1.2, 'line-dasharray': [3, 2] } }, firstSymbol);
         map.addLayer({ id: 'zones-label', type: 'symbol', source: 'zones', layout: { 'text-field': ['get', 'zone'], 'text-size': 13, 'text-font': ['Noto Sans Regular'], 'symbol-placement': 'point' }, paint: { 'text-color': '#5a3a1a', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
         for (const id of ['plot', 'strip', 'fpHigh', 'fpLow', 'fire', 'roadEdges', 'rays', 'measure', 'floors', 'demolished']) map.addSource(id, { type: 'geojson', data: fc([]) });
         map.addSource('buildings', { type: 'geojson', data: BUILDINGS as any });
         const notDemolished: any = ['!', ['in', ['get', 'id'], ['literal', []]]];
-        map.addLayer({ id: 'bld-assumed', type: 'fill-extrusion', source: 'buildings', filter: ['all', ['==', ['get', 'src'], 'assumed'], notDemolished], paint: { 'fill-extrusion-color': COLORS.bldAssumed, 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 0.55 } });
-        map.addLayer({ id: 'bld-known', type: 'fill-extrusion', source: 'buildings', filter: ['all', ['!=', ['get', 'src'], 'assumed'], notDemolished], paint: { 'fill-extrusion-color': ['match', ['get', 'src'], 'listing', COLORS.bldListing, 'visual', COLORS.bldVisual, COLORS.bldKnown] as any, 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 0.85 } });
+        map.addLayer({ id: 'bld-assumed', type: 'fill-extrusion', source: 'buildings', filter: ['all', ['==', ['get', 'src'], 'assumed'], notDemolished], paint: { 'fill-extrusion-color': COLORS.building, 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 0.9 } });
+        map.addLayer({ id: 'bld-known', type: 'fill-extrusion', source: 'buildings', filter: ['all', ['!=', ['get', 'src'], 'assumed'], notDemolished], paint: { 'fill-extrusion-color': COLORS.building, 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 0.9 } });
         map.addLayer({ id: 'demolished', type: 'line', source: 'demolished', paint: { 'line-color': '#8a9099', 'line-width': 1, 'line-dasharray': [1, 2] } });
-        map.addLayer({ id: 'strip', type: 'fill', source: 'strip', paint: { 'fill-color': COLORS.strip, 'fill-opacity': 0.35 } });
+        map.addLayer({ id: 'strip', type: 'fill', source: 'strip', paint: { 'fill-color': COLORS.strip, 'fill-opacity': 0.18 } });
         map.addLayer({ id: 'fire', type: 'fill', source: 'fire', paint: { 'fill-color': COLORS.fire, 'fill-opacity': 0.35 } });
-        map.addLayer({ id: 'fpHigh', type: 'line', source: 'fpHigh', paint: { 'line-color': COLORS.fpHigh, 'line-width': 2, 'line-dasharray': [2, 1.5] } });
-        map.addLayer({ id: 'fpLow', type: 'line', source: 'fpLow', paint: { 'line-color': COLORS.fpLow, 'line-width': 2, 'line-dasharray': [1, 1.5] } });
-        map.addLayer({ id: 'plot-fill', type: 'fill', source: 'plot', paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.12 } });
+        map.addLayer({ id: 'fpHigh', type: 'line', source: 'fpHigh', paint: { 'line-color': COLORS.fpHigh, 'line-width': 1.2, 'line-dasharray': [3, 2] } });
+        map.addLayer({ id: 'fpLow', type: 'line', source: 'fpLow', paint: { 'line-color': COLORS.fpLow, 'line-width': 1.2, 'line-dasharray': [3, 2] } });
+        map.addLayer({ id: 'plot-fill', type: 'fill', source: 'plot', paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.55 } });
         map.addLayer({ id: 'plot-line', type: 'line', source: 'plot', paint: { 'line-color': COLORS.plot, 'line-width': 2.5 } });
-        map.addLayer({ id: 'roadEdges', type: 'line', source: 'roadEdges', paint: { 'line-color': COLORS.road, 'line-width': 6, 'line-opacity': 0.9 } });
+        map.addLayer({ id: 'roadEdges', type: 'line', source: 'roadEdges', paint: { 'line-color': COLORS.road, 'line-width': 4, 'line-opacity': 1 } });
         map.addLayer({ id: 'rays', type: 'line', source: 'rays', paint: { 'line-color': COLORS.rays, 'line-width': 1.5, 'line-opacity': 0.8 } });
         map.addLayer({ id: 'measure', type: 'line', source: 'measure', paint: { 'line-color': COLORS.measure, 'line-width': 3 } });
-        map.addLayer({ id: 'floors', type: 'fill-extrusion', source: 'floors', paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-opacity': 0.92 } });
+        map.addLayer({ id: 'floors', type: 'fill-extrusion', source: 'floors', paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-opacity': 0.97 } });
         const env = new EnvelopeLayer();
         envRef.current = env;
         map.addLayer(env);
+
+        // hover (or tap) a neighbouring building: its name and where its height comes from
+        const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: 'bld-pop', offset: 8 });
+        const SRC: Record<string, string> = { height: 'OSM height tag', levels: 'OSM levels tag', listing: 'sourced listing', visual: 'visual estimate', assumed: 'unknown, 6 m assumed' };
+        const show = (e: any) => {
+          const f = e.features?.[0];
+          if (!f || props.current.tool !== 'edit') return;
+          const pp = f.properties as Record<string, any>;
+          const floors = pp.levels ?? pp.floors;
+          const text = `${pp.name ? pp.name + ' · ' : ''}${Math.round(pp.h)} m${floors ? ` (${floors} floors)` : ''} · ${SRC[pp.src] ?? pp.src}`;
+          popup.setLngLat(e.lngLat).setText(text).addTo(map);
+        };
+        for (const l of ['bld-known', 'bld-assumed']) {
+          map.on('mousemove', l, show);
+          map.on('mouseleave', l, () => popup.remove());
+        }
+
+        // three callouts on the model, instead of a legend
+        // each callout has its own side of its point, so the three don't pile up at the plot's front corner
+        const mk = (cls: string, anchor: 'bottom' | 'top' | 'right', offset: [number, number]) => {
+          const d = document.createElement('div');
+          d.className = `callout ${cls}`;
+          return new maplibregl.Marker({ element: d, anchor, offset });
+        };
+        callouts.current = { height: mk('c-height', 'bottom', [0, -14]), road: mk('c-road', 'top', [0, 12]), clear: mk('c-clear', 'right', [-12, 0]) };
+        // attribution starts collapsed (the (i) button opens it)
+        const collapse = () => el.current?.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
+        collapse();
+        map.once('idle', collapse);
 
         const draw = new TerraDraw({
           adapter: new TerraDrawMapLibreGLAdapter({ map }),
@@ -251,8 +287,11 @@ export function MapView(p: MapProps) {
     set('strip', fc(site ? mpToLL(frame, site.stripMP) : []));
     set('roadEdges', fc(site ? site.roads.map((rd) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [frame.toLL(rd.a), frame.toLL(rd.b)] } })) : []));
     const fps = r.footprints;
-    set('fpHigh', fc(fps && v.envelope !== 'lowRise' ? mpToLL(frame, fps.highRise.mp) : []));
-    set('fpLow', fc(fps && v.envelope !== 'highRise' ? mpToLL(frame, fps.lowRise.mp) : []));
+    // the envelope follows the selected option: the tower's, or the low-rise one (when A is a low-rise too)
+    const sel = r.concepts.find((c) => c.concept.id === v.concept)?.concept ?? r.concepts[0]?.concept;
+    const envKind: 'highRise' | 'lowRise' | 'none' = v.envelope === 'none' ? 'none' : sel?.kind === 'tower' ? 'highRise' : sel ? 'lowRise' : v.envelope;
+    set('fpHigh', fc(fps && envKind === 'highRise' ? mpToLL(frame, fps.highRise.mp) : []));
+    set('fpLow', fc(fps && envKind === 'lowRise' ? mpToLL(frame, fps.lowRise.mp) : []));
     const concept = r.concepts.find((c) => c.concept.id === v.concept)?.concept;
     set('fire', fc(concept?.openSpace.fireRing ? mpToLL(frame, concept.openSpace.fireRing) : []));
     const floors: any[] = [];
@@ -264,12 +303,46 @@ export function MapView(p: MapProps) {
       }
     }
     set('floors', fc(floors));
+    // callouts
+    const co = callouts.current;
+    if (co) {
+      const put = (m: maplibregl.Marker, at: LL | null, text: string) => {
+        const e = m.getElement();
+        if (!at) { m.remove(); return; }
+        e.textContent = text;
+        m.setLngLat(at);
+        if (!(m as any)._map) m.addTo(map);
+      };
+      const road = site?.roads[0];
+      const small = map.getContainer().clientWidth < 600;
+      put(co.road, road ? frame.toLL([(road.a[0] + road.b[0]) / 2, (road.a[1] + road.b[1]) / 2]) : null, small || !props.current.roadName ? 'Road edge' : `Road edge, ${props.current.roadName}`);
+      const fpShown = envKind !== 'lowRise' ? fps?.highRise : fps?.lowRise;
+      const h = r.plane ? (envKind !== 'lowRise' ? r.plane.atHighRiseFront : r.plane.atLowRiseFront) : null;
+      let front: LL | null = null;
+      if (site && fpShown && fpShown.area > 0 && road) {
+        // middle of the footprint's road-side line: where the height limit is lowest
+        const pts = fpShown.mp.flatMap((poly) => poly[0].slice(0, -1)).map((q) => ({ q, d: pointSegDist(q, road.nearA, road.nearB) })).sort((x, y) => x.d - y.d);
+        if (pts.length >= 2) front = frame.toLL([(pts[0].q[0] + pts[1].q[0]) / 2, (pts[0].q[1] + pts[1].q[1]) / 2]);
+      }
+      const hr = envKind !== 'lowRise';
+      put(co.height, front && h ? front : null, h ? (hr ? (small ? `Height limit ${h.toFixed(1)} m` : `Height limit at the front line: ${h.toFixed(1)} m`) : 'Low-rise: under 23 m') : '');
+      let clearAt: LL | null = null, clearText = '';
+      if (site && fpShown && site.ring.length >= 3) {
+        const side = fpShown.setbacks.find((x) => !x.road);
+        if (side) {
+          const i = side.edge, a = site.ring[i], b = site.ring[(i + 1) % site.ring.length];
+          clearAt = frame.toLL([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+          clearText = hr ? (small ? '6 m clear' : '6 m clear all round') : small ? `${side.setback.toFixed(0)} m clear` : `${side.setback.toFixed(0)} m from the side boundaries`;
+        }
+      }
+      put(co.clear, clearAt, clearText);
+    }
     // envelope
     const env = envRef.current;
     if (env) {
-      if (!site || !fps || v.envelope === 'none') env.set(null, []);
-      else if (v.envelope === 'highRise') env.set(frame, fps.highRise.area > 0 ? [{ mesh: envelopeMesh(site, fps.highRise.mp), color: COLORS.envHigh, opacity: 0.16 }] : []);
-      else env.set(frame, fps.lowRise.area > 0 ? [{ mesh: envelopeMesh(site, fps.lowRise.mp, 23), color: COLORS.envLow, opacity: 0.18 }] : []);
+      if (!site || !fps || envKind === 'none') env.set(null, []);
+      else if (envKind === 'highRise') env.set(frame, fps.highRise.area > 0 ? [{ mesh: envelopeMesh(site, fps.highRise.mp), color: COLORS.envHigh, opacity: 0.1 }] : []);
+      else env.set(frame, fps.lowRise.area > 0 ? [{ mesh: envelopeMesh(site, fps.lowRise.mp, 23), color: COLORS.envLow, opacity: 0.12 }] : []);
     }
   }
 
@@ -282,7 +355,8 @@ export function MapView(p: MapProps) {
     const b = ring.reduce((a, c) => [Math.min(a[0], c[0]), Math.min(a[1], c[1]), Math.max(a[2], c[0]), Math.max(a[3], c[1])], [Infinity, Infinity, -Infinity, -Infinity]);
     const el2 = map.getContainer();
     const padding = Math.round(Math.max(20, Math.min(160, 0.2 * Math.min(el2.clientWidth, el2.clientHeight))));
-    map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding, maxZoom: 18, pitch: DEFAULT_PITCH, bearing: DEFAULT_BEARING, duration: 600 });
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding, maxZoom: 18, pitch: DEFAULT_PITCH, bearing: DEFAULT_BEARING, duration: reduce ? 0 : 700 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.fitKey]);
 

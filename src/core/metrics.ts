@@ -41,9 +41,15 @@ export function resolveZone(site: Site, zones: ZonePoly[], override: Zone | null
     else messages.push({ level: 'info', code: 'zoneOverrideMatch', text: `Zone set by hand to ${override}; matches the zone layer.` });
     return { status: 'override', parts: [{ zone: override, area: site.netArea, share: 1 }], supported: [{ zone: override, area: site.netArea }], detected, messages };
   }
+  const uncovered = Math.max(0, 1 - covered / site.netArea);
+  const canal = 'It may be a river, canal (khlong) or unzoned land; canal setbacks (Reg. 55 cl. 42) are not modelled.';
   if (!detected.length) {
-    messages.push({ level: 'error', code: 'zoneNone', text: 'No zone found under this plot in the zone layer. Zone not supported: the tool covers ย.8–ย.10 only. You can set the zone by hand if you know it.' });
+    messages.push({ level: 'error', code: 'zoneNone', text: `${fmt(uncovered * 100)}% of the plot is outside any zone in the zone map. ${canal} Zone not supported: the tool covers ย.8–ย.10 only. You can set the zone by hand if you know it.` });
     return { status: 'none', parts: [], supported: [], detected, messages };
+  }
+  if (uncovered > 0.5) {
+    messages.push({ level: 'error', code: 'zoneMostlyNone', text: `${fmt(uncovered * 100)}% of the plot is outside any zone in the zone map (${detected.map((p) => `${fmt(p.share * 100)}% ${p.zone}`).join(', ')}). ${canal} The tool won't apply a zone to most of a plot that has none; set it by hand if you know it.` });
+    return { status: 'none', parts: detected, supported: [], detected, messages };
   }
   const unsupported = detected.filter((p) => !isSupportedZone(p.zone));
   if (unsupported.length) {
@@ -61,7 +67,7 @@ export function resolveZone(site: Site, zones: ZonePoly[], override: Zone | null
     return { zone: p.zone, area, share: area / site.netArea };
   });
   if (gap / site.netArea > 0.05) {
-    messages.push({ level: 'warn', code: 'zoneGap', text: `${fmt((gap / site.netArea) * 100)}% of the plot falls in no zone polygon (the boundaries are simplified). That part is shared out in proportion to the zones present.` });
+    messages.push({ level: 'warn', code: 'zoneGap', text: `${fmt((gap / site.netArea) * 100)}% of the plot falls in no zone polygon. The boundaries are simplified, but it could also be a road, canal or river. That part is shared out in proportion to the zones present. ${canal}` });
   }
   const supported = parts.map((p) => ({ zone: p.zone as Zone, area: p.area }));
   if (parts.length === 1) {

@@ -127,3 +127,28 @@ translation matter:
 | E2 | **Current-width default = 11.5 m, the building-gap upper bound, not a survey.** Method: perpendicular rays from the OSM centreline every 2 m over the frontage, ≤ 40 m each side, kept only where both sides hit a building outline; the value is the minimum gap (the tightest valid bound). Measured from the plot's own front edge, the same estimator the panel runs, **3 of 20 rays** hit both sides, with a median of **16.4 m**. (The first build measured from the centreline window and logged 4 of 21 and 16.7 m; the example now uses the panel's estimator, so the two agree.) The note beside the current-width input gives this, the 6.5–16.4 m range, and the fact that 11.5 m is only 1.5 m above the 10 m high-rise access threshold, so the result is sensitive to it. The plot's front edge sits 5.75 m (half of 11.5) from the centreline (symmetric assumption). Lower bound (a): lanes=2 × 3.25 m = 6.5 m, no sidewalk tags. | Brief item 8. The right-of-way is at or below the gap; it is at least the carriageway. |
 | E3 | With 16 m planned and 11.5 m current, the widening strip is 2.25 m: plot 2,000 m² − 90 m² = **1,910 m²** for floor area. | W1–W2. |
 | E4 | The measure tool (c) gives a click-to-click distance over Esri World Imagery; the user decides whether it's a boundary-to-boundary width. The tool never fills it in itself. | Brief: don't invent a measured value. |
+
+## Interface (redesign, 21 Nov): presentation only, no calculation changed
+
+| # | Decision | Reason |
+|---|---|---|
+| U1 | Layout: 56 px top bar, 340 px setup panel, map, 420 px results. On the map only zoom, a collapsed attribution and three callouts (height limit at the front line, road edge, clearance). The 13-item legend is gone. | Review: the legend covered the model, and the answer wasn't on screen. |
+| U2 | Under 900 px the panels stack: a header with a one-line summary and an Edit button, a 300 px map, then the results in normal page flow. Setup opens in flow under Edit. 20 px side padding, 44 px tap targets. | One breakpoint family. |
+| U3 | The setup is a sentence ("A condo on a 1,910 m² plot in zone ย.10, facing Soi Sukhumvit 39…") whose underlined values open small editors. Method detail (rays, building-gap bound) moved to the Rules view. | Plain words first. |
+| U4 | The verdict comes first ("A 21-storey tower fits here"), then one line naming what stops it, taken from the generator's `binding`. On the example that is floor area; the redesign mockup wrongly said the height limit. Then an A/B switch, three limit bars with plain notes, the checks (fails and warnings first, clause one click away), and floor by floor in a disclosure. | Review. |
+| U5 | Colour by meaning only: white/grey neighbours on a pale grey-green ground, drafting blue envelope, brown residential, pale tan parking, red road edge. Height sources (OSM tag, sourced listing, visual estimate, assumed) moved from model colours to a hover card and the Rules view. The envelope follows the selected option (tower or low-rise). Zone and gap-line layers are off by default. | Review. |
+| U6 | Type: Bai Jamjuree for headings and figures, Sarabun for text (both Thai-designed), with tabular figures so numbers don't shift as they change. The camera stays still while values change; it moves only on Reset or a share link, and not at all with reduced motion. | Review. |
+| U7 | The bonus inputs stay numeric (affordable m², rainwater m³, energy level 1–4), not tick boxes as in the mockup, because each bonus depends on an amount. | The calculation needs the amounts. |
+
+## Break-test fixes (21 Nov)
+
+| # | Decision | Reason |
+|---|---|---|
+| T1 | "Reset to example" is enabled whenever any input differs from the example (plot, road edges, zone override, every setting; the view alone doesn't count), and it resets all of them. | Break test 1. Tests in `test/breakfix.test.ts`. |
+| T2 | Comparison text shows as many decimals as it needs to stay on the right side of the threshold (`fmtVs`): "9.99 m (current) is under 10 m", never "10.0 m is under 10 m". | Break test 2. |
+| T3 | Values under a legal minimum stop the result: floor-to-floor or ground floor under 2.60 m (Reg. 55 cl. 22), average flat under 20 m² (Reg. 55 cl. 19). | Break test 3. A design that breaks them isn't feasible. |
+| T4 | A share link that can't be read (truncated, garbage, non-numeric or too few corners, malformed road edges) shows "This link couldn't be read, so you're seeing the example." | Break test 4. |
+| T5 | Typed numbers are parsed strictly: digits with a dot, or a single comma as the decimal point only when there's no other separator ("12,5"). Hex ("0x10"), exponents ("1e3") and thousands separators ("1,000", "1 000") are rejected with a message under the field, and the value isn't applied. | Break test 5. |
+| T6 | A plot mostly (> 50%) outside every zone polygon gives no result and says what share has no zone ("96% of the plot is outside any zone… may be a river, canal (khlong) or unzoned land"). Smaller gaps still compute, with the same caveat. Waterways aren't in the tool's data, so a plot over Khlong Saen Saep can't be detected directly. Canal setbacks (Reg. 55 cl. 42) stay a stated limit, now worded in Limits. | Break test 6. |
+| T7 | The URL state is written at once on `pagehide` and when the tab is hidden, so a refresh right after an edit keeps it. Limits notes that edits replace the history entry, so Back leaves the tool. | Break test 7. |
+| T8 | The example opens with one line above the result: "Example: a 2,000 m² plot on Sukhumvit Soi 39, 1,910 m² once the road is widened. A is a tower on a podium, B a low-rise block. Draw your own plot, or drag the corners." | Break test 8. |

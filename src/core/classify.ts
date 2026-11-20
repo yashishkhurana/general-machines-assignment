@@ -1,4 +1,5 @@
 // Building classes and which ones the plot can have.
+import { fmtVs } from './format';
 import { rule } from './rules';
 import type { Settings, Site } from './types';
 
@@ -39,8 +40,8 @@ export function availability(site: Site, s: Settings): Availability {
   else if (!best) {
     const longest = Math.max(...site.roads.map((r) => r.frontage));
     const widest = Math.max(...site.roads.map((r) => r.current));
-    if (longest < rule('access.frontage')) reasons.push(`Frontage ${longest.toFixed(1)} m is under ${rule('access.frontage')} m (Reg. 33 cl. 2).`);
-    if (widest < minRoad) reasons.push(`Road right-of-way ${widest.toFixed(1)} m (current) is under ${minRoad} m (Reg. 33 cl. 2).`);
+    if (longest < rule('access.frontage')) reasons.push(`Frontage ${fmtVs(longest, rule('access.frontage'))} m is under ${rule('access.frontage')} m (Reg. 33 cl. 2).`);
+    if (widest < minRoad) reasons.push(`Road right-of-way ${fmtVs(widest, minRoad)} m (current) is under ${minRoad} m (Reg. 33 cl. 2).`);
     if (!reasons.length) reasons.push(`No single road edge has both a ${rule('access.frontage')} m frontage and a ${minRoad} m road (Reg. 33 cl. 2).`);
   }
   if (!s.roadContinuity) reasons.push('The road is not confirmed to continue at the same width to another public road (Reg. 33 cl. 2, tick-box).');
@@ -48,7 +49,7 @@ export function availability(site: Site, s: Settings): Availability {
   let floorAreaCap: number | null = null, capReason: string | null = null;
   if (highRise && best.current < rule('access.road.big')) {
     floorAreaCap = rule('access.big.area');
-    capReason = `Road right-of-way ${best.current.toFixed(1)} m (current) is under ${rule('access.road.big')} m, so floor area is capped at ${rule('access.big.area').toLocaleString('en-US')} m² (Reg. 33 cl. 2).`;
+    capReason = `Road right-of-way ${fmtVs(best.current, rule('access.road.big'))} m (current) is under ${rule('access.road.big')} m, so floor area is capped at ${rule('access.big.area').toLocaleString('en-US')} m² (Reg. 33 cl. 2).`;
   }
   return { highRise, reasons, floorAreaCap, capReason, accessRoadCurrent: best?.current ?? 0, accessFrontage: best?.frontage ?? 0 };
 }

@@ -1,5 +1,6 @@
 // Input checks. Returns messages; never throws. An 'error' stops the calculation, but the page keeps working.
 import { dist, ringArea, selfIntersects, type Ring } from './geom';
+import { fmtVs } from './format';
 import { rule } from './rules';
 import type { Message, RoadEdgeInput, Settings } from './types';
 
@@ -28,8 +29,8 @@ export function validatePlot(plot: Ring | null | undefined): Message[] {
     return m;
   }
   const a = ringArea(plot);
-  if (a < rule('v.minArea')) m.push({ level: 'error', code: 'tooSmall', text: `Plot is ${fmt(a)} m², under the ${fmt(rule('v.minArea'))} m² this tool accepts.` });
-  if (a > rule('v.maxArea')) m.push({ level: 'error', code: 'tooLarge', text: `Plot is ${fmt(a)} m², over the ${fmt(rule('v.maxArea'))} m² this tool accepts.` });
+  if (a < rule('v.minArea')) m.push({ level: 'error', code: 'tooSmall', text: `Plot is ${fmtVs(a, rule('v.minArea'), 0)} m², under the ${fmt(rule('v.minArea'))} m² this tool accepts.` });
+  if (a > rule('v.maxArea')) m.push({ level: 'error', code: 'tooLarge', text: `Plot is ${fmtVs(a, rule('v.maxArea'), 0)} m², over the ${fmt(rule('v.maxArea'))} m² this tool accepts.` });
   // thin sliver check: area small relative to perimeter
   let per = 0;
   for (let i = 0; i < plot.length; i++) per += dist(plot[i], plot[(i + 1) % plot.length]);
@@ -62,11 +63,11 @@ export function validateRoads(plot: Ring, roads: RoadEdgeInput[]): Message[] {
       else if (v > rule('v.maxRoad')) m.push({ level: 'error', code: 'roadTooWide', text: `${label}: ${name} of ${fmt(v, 1)} m is over the ${rule('v.maxRoad')} m this tool accepts.` });
     }
     if (Number.isFinite(r.current) && Number.isFinite(r.width) && r.current < r.width && r.current > 0) {
-      m.push({ level: 'info', code: 'widening', text: `${label}: current right-of-way ${fmt(r.current, 1)} m is under the planned ${fmt(r.width, 1)} m. A ${fmt((r.width - r.current) / 2, 2)} m widening strip comes out of the plot (art. 36 ¶2, art. 45).` });
+      m.push({ level: 'info', code: 'widening', text: `${label}: current right-of-way ${fmtVs(r.current, r.width)} m is under the planned ${fmtVs(r.width, r.current)} m. A ${fmt((r.width - r.current) / 2, 2)} m widening strip comes out of the plot (art. 36 ¶2, art. 45).` });
     }
     const len = dist(plot[r.edge], plot[(r.edge + 1) % n]);
     if (len < rule('access.frontage')) {
-      m.push({ level: 'warn', code: 'shortFrontage', text: `${label}: frontage ${fmt(len, 1)} m is under ${rule('access.frontage')} m. That blocks the high-rise and extra-large classes (Reg. 33 cl. 2).` });
+      m.push({ level: 'warn', code: 'shortFrontage', text: `${label}: frontage ${fmtVs(len, rule('access.frontage'))} m is under ${rule('access.frontage')} m. That blocks the high-rise and extra-large classes (Reg. 33 cl. 2).` });
     }
   }
   if (seen.size > 1) {
@@ -86,8 +87,11 @@ export function validateSettings(s: Settings): Message[] {
   for (const [k, v] of [['ground floor height', s.groundFloor], ['floor-to-floor', s.floorToFloor]] as const) {
     if (!Number.isFinite(v) || v <= 0) m.push({ level: 'error', code: 'height', text: `The ${k} must be a positive number.` });
   }
-  if (Number.isFinite(s.floorToFloor) && s.floorToFloor < rule('unit.minF2F')) {
-    m.push({ level: 'warn', code: 'f2f', text: `Floor-to-floor ${s.floorToFloor} m is under the ${rule('unit.minF2F')} m minimum for residential floors (Reg. 55 cl. 22).` });
+  // values under a legal minimum stop the result: a design that breaks them isn't a feasible design
+  for (const [k, v] of [['Typical floor-to-floor', s.floorToFloor], ['Ground floor height', s.groundFloor]] as const) {
+    if (Number.isFinite(v) && v > 0 && v < rule('unit.minF2F')) {
+      m.push({ level: 'error', code: 'f2f', text: `${k} of ${fmtVs(v, rule('unit.minF2F'), 2)} m is under the ${rule('unit.minF2F').toFixed(2)} m legal minimum for residential floors (Reg. 55 cl. 22). Raise it to see a result.` });
+    }
   }
   if (![b.affordableArea, b.rainwaterM3, b.energyLevel].every((v) => Number.isFinite(v) && v >= 0)) {
     m.push({ level: 'error', code: 'bonus', text: 'Bonus inputs must be zero or positive numbers.' });
@@ -95,7 +99,7 @@ export function validateSettings(s: Settings): Message[] {
   if (s.parkingAreaPerSpace !== null && !(s.parkingAreaPerSpace >= 12)) {
     m.push({ level: 'error', code: 'parking', text: 'Parking area per space must be at least 12 m² (one 2.4 × 5.0 m stall, Reg. 41).' });
   }
-  if (!(s.avgUnitArea >= rule('unit.minArea'))) m.push({ level: 'warn', code: 'unit', text: `Average unit area is under the ${rule('unit.minArea')} m² minimum (Reg. 55 cl. 19).` });
+  if (!(s.avgUnitArea >= rule('unit.minArea'))) m.push({ level: 'error', code: 'unit', text: `Average flat of ${Number.isFinite(s.avgUnitArea) ? fmtVs(s.avgUnitArea, rule('unit.minArea')) + ' m²' : 'that size'} is under the ${rule('unit.minArea')} m² legal minimum (Reg. 55 cl. 19). Raise it to see a result.` });
   if (!(s.shareOver60 >= 0 && s.shareOver60 <= 1)) m.push({ level: 'error', code: 'mix', text: 'Share of units over 60 m² must be between 0 and 100%.' });
   return m;
 }
