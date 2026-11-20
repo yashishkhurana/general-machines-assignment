@@ -11,6 +11,7 @@ import { toSiteInput } from '../geo/siteInput';
 import { MapView } from './MapView';
 import { Checks, ConceptSwitch, Credits, Floors, Limits, Notices, RulesView, Setup, ToolHint, Verdict, n0, n1 } from './Panels';
 import { encodeState, exampleState, isExample, readLink, remapRoads, type AppState, type Tool, type ViewState } from './state';
+import { createUrlWriter } from './urlWriter';
 
 const initial = (() => {
   const link = readLink(location.hash);
@@ -65,26 +66,31 @@ export function App() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  // inputs live in the URL: debounced while editing, written at once when the page is hidden or closed
+  // inputs live in the URL: written at once on every discrete edit (a reload picks its URL before
+  // pagehide fires), throttled only while a corner is being dragged, and flushed when the page is hidden
+  const urlWriter = useMemo(() => createUrlWriter({ write: (h) => history.replaceState(null, '', h) }), []);
+  const dragging = useRef(false);
   useEffect(() => {
-    const t = setTimeout(() => history.replaceState(null, '', '#' + encodeState(state)), 250);
-    return () => clearTimeout(t);
-  }, [state]);
+    urlWriter.update('#' + encodeState(state), dragging.current);
+    dragging.current = false;
+  }, [state, urlWriter]);
   useEffect(() => {
-    const flush = () => history.replaceState(null, '', '#' + encodeState(stateRef.current));
+    const flush = () => { urlWriter.update('#' + encodeState(stateRef.current)); urlWriter.flush(); };
     const onVis = () => { if (document.visibilityState === 'hidden') flush(); };
     window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
     document.addEventListener('visibilitychange', onVis);
-    return () => { window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', onVis); };
-  }, []);
+    return () => { window.removeEventListener('pagehide', flush); window.removeEventListener('beforeunload', flush); document.removeEventListener('visibilitychange', onVis); };
+  }, [urlWriter]);
   useEffect(() => {
     if (!rules) return;
     const el = document.getElementById(rules === 'limits' || rules === 'road-width' ? rules : `rule-${rules}`);
     el?.scrollIntoView({ block: 'center', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }, [rules]);
 
-  const onRing = useCallback((ring: LL[], _final: boolean, isNew?: boolean) => {
+  const onRing = useCallback((ring: LL[], final: boolean, isNew?: boolean) => {
     if (isNew) { setMeasure([]); setTool('pickRoad'); }
+    dragging.current = !final && !isNew; // mid-drag updates are throttled; the final one is written at once
     setState((s) => ({ ...s, ring, roads: isNew ? [] : remapRoads(ringRef.current, ring, s.roads) }));
   }, []);
   const onPickEdge = useCallback((edge: number) => {

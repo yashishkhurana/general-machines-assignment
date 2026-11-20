@@ -2,11 +2,12 @@
 import { describe, expect, it } from 'vitest';
 import { availability } from '../src/core/classify';
 import { compute } from '../src/core/compute';
-import { fmtVs, parseDecimal } from '../src/core/format';
+import { fmtVs, parseDecimal, refusedText } from '../src/core/format';
 import type { Ring } from '../src/core/geom';
 import { buildSite } from '../src/core/site';
 import { DEFAULT_SETTINGS, type Settings, type SiteInput, type ZonePoly } from '../src/core/types';
 import { encodeState, exampleState, isExample, readLink } from '../src/ui/state';
+import { createUrlWriter } from '../src/ui/urlWriter';
 
 const RECT: Ring = [[0, 0], [40, 0], [40, 50], [0, 50]];
 const S = (o: Partial<Settings> = {}): Settings => ({ ...DEFAULT_SETTINGS, ...o, bonus: { ...DEFAULT_SETTINGS.bonus, ...(o.bonus ?? {}) } });
@@ -129,5 +130,80 @@ describe('6. plots mostly outside any zone polygon', () => {
     const r = compute(input({ zones }));
     expect(r.ok).toBe(true);
     expect(r.messages.find((x) => x.code === 'zoneGap')!.text).toMatch(/canal/);
+  });
+});
+
+describe('refresh right after an edit keeps it (share link written at once)', () => {
+  const setup = () => {
+    let t = 0;
+    const writes: string[] = [];
+    const timers: { at: number; fn: () => void }[] = [];
+    const w = createUrlWriter({ write: (h) => writes.push(h), now: () => t, setTimer: (fn, ms) => { const x = { at: t + ms, fn }; timers.push(x); return x; }, clearTimer: (x) => { const i = timers.indexOf(x as never); if (i >= 0) timers.splice(i, 1); } });
+    const advance = (ms: number) => { t += ms; for (const x of [...timers].filter((y) => y.at <= t)) { timers.splice(timers.indexOf(x), 1); x.fn(); } };
+    return { w, writes, advance };
+  };
+  it('a typed value is in the URL immediately, before any timer runs (a reload reads it)', () => {
+    const { w, writes } = setup();
+    w.update('#a');
+    w.update('#c=road-9');
+    w.update('#c=road-9.5');
+    expect(writes[writes.length - 1]).toBe('#c=road-9.5');
+    expect(w.pending).toBe(false);
+  });
+  it('a corner drag is throttled, but the latest position is written on the trailing edge and on flush', () => {
+    const { w, writes, advance } = setup();
+    w.update('#d0', true);
+    for (let i = 1; i <= 10; i++) { advance(16); w.update(`#d${i}`, true); }
+    expect(writes.length).toBeLessThan(5);
+    expect(w.pending).toBe(true);
+    w.flush(); // pagehide / tab hidden
+    expect(writes[writes.length - 1]).toBe('#d10');
+    advance(1000);
+    w.update('#d10', true);
+    expect(writes[writes.length - 1]).toBe('#d10');
+  });
+  it('the end of a drag (a discrete update) is written at once', () => {
+    const { w, writes, advance } = setup();
+    w.update('#d0', true); advance(10); w.update('#d1', true); advance(10);
+    w.update('#final');
+    expect(writes[writes.length - 1]).toBe('#final');
+  });
+  it('over the browser budget it falls back to throttling instead of throwing', () => {
+    let t = 0;
+    const writes: string[] = [];
+    const w = createUrlWriter({ write: (h) => writes.push(h), now: () => t, setTimer: () => 1, clearTimer: () => {}, budget: 5 });
+    for (let i = 0; i < 20; i++) { t += 10; w.update(`#e${i}`); }
+    expect(writes.length).toBe(5);
+    expect(w.pending).toBe(true);
+    w.flush();
+    expect(writes[writes.length - 1]).toBe('#e19');
+  });
+  it('a failing write (browser refusal) is retried on the next update', () => {
+    let fail = true;
+    const writes: string[] = [];
+    const w = createUrlWriter({ write: (h) => { if (fail) throw new Error('SecurityError'); writes.push(h); } });
+    w.update('#x');
+    expect(writes).toEqual([]);
+    fail = false;
+    w.update('#y');
+    expect(writes).toEqual(['#y']);
+  });
+});
+
+describe('a refused value says which value is still in use', () => {
+  it('unfinished input ("9.", "12,", "-") is not an error and not applied', () => {
+    for (const x of ['9.', '12,', '-']) {
+      const r = parseDecimal(x);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.incomplete).toBe(true);
+    }
+  });
+  it('"Not a number. … Still using 12.5 m."', () => {
+    const r = parseDecimal('abc');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(refusedText(r.error, 12.5, 'm')).toMatch(/^Not a number\..*Still using 12\.5 m\.$/);
+    expect(refusedText('Leave out thousands separators: type 1000, not 1,000.', 1000, 'm²')).toBe('Leave out thousands separators: type 1000, not 1,000. Still using 1000 m².');
+    expect(refusedText('Enter a number.', NaN, 'm')).toBe('Enter a number. No value in use yet.');
+    expect(refusedText('Not a number.', 25, '%')).toBe('Not a number. Still using 25%.');
   });
 });

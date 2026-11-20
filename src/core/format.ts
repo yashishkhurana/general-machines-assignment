@@ -12,7 +12,7 @@ export function fmtVs(x: number, threshold: number, minDecimals = 1): string {
   return x.toLocaleString('en-US', { maximumFractionDigits: 6 });
 }
 
-export type Parsed = { ok: true; value: number } | { ok: false; empty: boolean; error: string };
+export type Parsed = { ok: true; value: number } | { ok: false; empty: boolean; error: string; incomplete?: boolean };
 
 /** Strict decimal parsing for typed inputs. Accepts "12", "12.5", "-3", and a single comma as the decimal
  *  point ("12,5") only when there is no other separator. Rejects hex ("0x10"), exponents ("1e3"),
@@ -20,6 +20,8 @@ export type Parsed = { ok: true; value: number } | { ok: false; empty: boolean; 
 export function parseDecimal(raw: string): Parsed {
   const s = raw.trim();
   if (s === '') return { ok: false, empty: true, error: 'Enter a number.' };
+  // still being typed ("9.", "12,", "-"): not an error yet, and not applied
+  if (/^-?(\d+[.,])?$/.test(s)) return { ok: false, empty: false, incomplete: true, error: 'Finish typing the number.' };
   if (/^-?\d+(\.\d+)?$/.test(s)) return { ok: true, value: Number(s) };
   if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s) || /^-?\d{1,3}( \d{3})+(\.\d+)?$/.test(s)) {
     return { ok: false, empty: false, error: 'Leave out thousands separators: type 1000, not 1,000.' };
@@ -28,4 +30,10 @@ export function parseDecimal(raw: string): Parsed {
   if (/^-?0x/i.test(s)) return { ok: false, empty: false, error: 'Hexadecimal numbers are not accepted.' };
   if (/e/i.test(s)) return { ok: false, empty: false, error: 'Type the number in full, without an exponent.' };
   return { ok: false, empty: false, error: 'Not a number. Use digits, with a dot for decimals.' };
+}
+
+/** "Not a number. Still using 12.5 m": the refused input's message, plus the value the result still uses. */
+export function refusedText(err: string, inUse: number, unit?: string): string {
+  const use = Number.isFinite(inUse) ? `Still using ${String(+inUse.toFixed(4))}${unit ? (unit === '%' ? '%' : ` ${unit}`) : ''}.` : 'No value in use yet.';
+  return `${err.replace(/\.$/, '')}. ${use}`;
 }

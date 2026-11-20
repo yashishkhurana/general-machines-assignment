@@ -2,7 +2,7 @@ import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MLMap, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TerraDraw, TerraDrawPolygonMode, TerraDrawSelectMode } from 'terra-draw';
 import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
 import type { Results } from '../core/compute';
@@ -71,6 +71,10 @@ export function MapView(p: MapProps) {
   const props = useRef(p);
   props.current = p;
   const callouts = useRef<Record<'height' | 'road' | 'clear', maplibregl.Marker> | null>(null);
+  const coState = useRef<{ centre: LL | null; pts: Partial<Record<'height' | 'road' | 'clear', LL>> }>({ centre: null, pts: {} });
+  const [labelsAll, setLabelsAll] = useState(false); // phone: only the height limit unless asked
+  const labelsRef = useRef(labelsAll);
+  labelsRef.current = labelsAll;
 
   // ---- init once -------------------------------------------------------------------------------
   useEffect(() => {
@@ -146,14 +150,17 @@ export function MapView(p: MapProps) {
           map.on('mouseleave', l, () => popup.remove());
         }
 
-        // three callouts on the model, instead of a legend
-        // each callout has its own side of its point, so the three don't pile up at the plot's front corner
-        const mk = (cls: string, anchor: 'bottom' | 'top' | 'right', offset: [number, number]) => {
+        // three callouts on the model, instead of a legend: each label sits out from the plot on a leader line,
+        // so none covers the outline or the tower base (laid out again whenever the camera moves)
+        const mk = (cls: string) => {
           const d = document.createElement('div');
-          d.className = `callout ${cls}`;
-          return new maplibregl.Marker({ element: d, anchor, offset });
+          d.className = `co ${cls}`;
+          d.innerHTML = '<svg class="co-line" aria-hidden="true"><line x1="0" y1="0" x2="0" y2="0"/><circle cx="0" cy="0" r="2.5"/></svg><span class="co-label"></span>';
+          return new maplibregl.Marker({ element: d, anchor: 'center' });
         };
-        callouts.current = { height: mk('c-height', 'bottom', [0, -14]), road: mk('c-road', 'top', [0, 12]), clear: mk('c-clear', 'right', [-12, 0]) };
+        callouts.current = { height: mk('c-height'), road: mk('c-road'), clear: mk('c-clear') };
+        let lraf = 0;
+        map.on('move', () => { cancelAnimationFrame(lraf); lraf = requestAnimationFrame(layoutCallouts); });
         // attribution starts collapsed (the (i) button opens it)
         const collapse = () => el.current?.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
         collapse();
@@ -306,26 +313,29 @@ export function MapView(p: MapProps) {
     // callouts
     const co = callouts.current;
     if (co) {
-      const put = (m: maplibregl.Marker, at: LL | null, text: string) => {
-        const e = m.getElement();
-        if (!at) { m.remove(); return; }
-        e.textContent = text;
-        m.setLngLat(at);
+      const small = map.getContainer().clientWidth < 600;
+      const pts: Partial<Record<'height' | 'road' | 'clear', LL>> = {};
+      const put = (k: 'height' | 'road' | 'clear', at: LL | null, text: string) => {
+        const m = co[k];
+        const show = !!at && (!small || k === 'height' || labelsRef.current);
+        if (!show) { m.remove(); return; }
+        (m.getElement().querySelector('.co-label') as HTMLElement).textContent = text;
+        m.setLngLat(at!);
+        pts[k] = at!;
         if (!(m as any)._map) m.addTo(map);
       };
       const road = site?.roads[0];
-      const small = map.getContainer().clientWidth < 600;
-      put(co.road, road ? frame.toLL([(road.a[0] + road.b[0]) / 2, (road.a[1] + road.b[1]) / 2]) : null, small || !props.current.roadName ? 'Road edge' : `Road edge, ${props.current.roadName}`);
+      put('road', road ? frame.toLL([(road.a[0] + road.b[0]) / 2, (road.a[1] + road.b[1]) / 2]) : null, small || !props.current.roadName ? 'Road edge' : `Road edge, ${props.current.roadName}`);
       const fpShown = envKind !== 'lowRise' ? fps?.highRise : fps?.lowRise;
       const h = r.plane ? (envKind !== 'lowRise' ? r.plane.atHighRiseFront : r.plane.atLowRiseFront) : null;
       let front: LL | null = null;
       if (site && fpShown && fpShown.area > 0 && road) {
         // middle of the footprint's road-side line: where the height limit is lowest
-        const pts = fpShown.mp.flatMap((poly) => poly[0].slice(0, -1)).map((q) => ({ q, d: pointSegDist(q, road.nearA, road.nearB) })).sort((x, y) => x.d - y.d);
-        if (pts.length >= 2) front = frame.toLL([(pts[0].q[0] + pts[1].q[0]) / 2, (pts[0].q[1] + pts[1].q[1]) / 2]);
+        const pp = fpShown.mp.flatMap((poly) => poly[0].slice(0, -1)).map((q) => ({ q, d: pointSegDist(q, road.nearA, road.nearB) })).sort((x, y) => x.d - y.d);
+        if (pp.length >= 2) front = frame.toLL([(pp[0].q[0] + pp[1].q[0]) / 2, (pp[0].q[1] + pp[1].q[1]) / 2]);
       }
       const hr = envKind !== 'lowRise';
-      put(co.height, front && h ? front : null, h ? (hr ? (small ? `Height limit ${h.toFixed(1)} m` : `Height limit at the front line: ${h.toFixed(1)} m`) : 'Low-rise: under 23 m') : '');
+      put('height', front && h ? front : null, h ? (hr ? (small ? `Height limit ${h.toFixed(1)} m` : `Height limit at the front line: ${h.toFixed(1)} m`) : 'Low-rise: under 23 m') : '');
       let clearAt: LL | null = null, clearText = '';
       if (site && fpShown && site.ring.length >= 3) {
         const side = fpShown.setbacks.find((x) => !x.road);
@@ -335,7 +345,10 @@ export function MapView(p: MapProps) {
           clearText = hr ? (small ? '6 m clear' : '6 m clear all round') : small ? `${side.setback.toFixed(0)} m clear` : `${side.setback.toFixed(0)} m from the side boundaries`;
         }
       }
-      put(co.clear, clearAt, clearText);
+      put('clear', clearAt, clearText);
+      const ring = state.ring;
+      coState.current = { centre: ring.length >= 3 ? [ring.reduce((a, c) => a + c[0], 0) / ring.length, ring.reduce((a, c) => a + c[1], 0) / ring.length] : null, pts };
+      layoutCallouts();
     }
     // envelope
     const env = envRef.current;
@@ -348,7 +361,7 @@ export function MapView(p: MapProps) {
 
   useEffect(syncPlot, [p.state.ring]);
   useEffect(syncTool, [p.tool]);
-  useEffect(syncData, [p.results, p.state.view, p.rays, p.measure, p.demolished, p.frame]);
+  useEffect(syncData, [p.results, p.state.view, p.rays, p.measure, p.demolished, p.frame, labelsAll]);
   useEffect(() => {
     const map = mapRef.current, ring = p.state.ring;
     if (!map || ring.length < 3) return;
@@ -359,6 +372,58 @@ export function MapView(p: MapProps) {
     map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding, maxZoom: 18, pitch: DEFAULT_PITCH, bearing: DEFAULT_BEARING, duration: reduce ? 0 : 700 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.fitKey]);
+
+  // place each callout label out from the plot, along the line from the plot's centre through its point,
+  // with a fixed bias per callout so the three fan apart; keep labels inside the map
+  function layoutCallouts() {
+    const map = mapRef.current, co = callouts.current, st = coState.current;
+    if (!map || !co || !st.centre) return;
+    const c = map.project(st.centre);
+    const W = map.getContainer().clientWidth, H = map.getContainer().clientHeight;
+    const small = W < 600;
+    const bias: Record<string, [number, number]> = { height: [-0.35, -1], road: [0.55, 1], clear: [-1, 0.25] };
+    const placed: { k: string; lab: HTMLElement; line: SVGLineElement; x: number; y: number; dir: number }[] = [];
+    for (const k of ['height', 'road', 'clear'] as const) {
+      const at = st.pts[k];
+      if (!at) continue;
+      const p = map.project(at);
+      let dx = p.x - c.x, dy = p.y - c.y;
+      const n = Math.hypot(dx, dy) || 1;
+      dx = dx / n + bias[k][0]; dy = dy / n + bias[k][1];
+      const m = Math.hypot(dx, dy) || 1;
+      const L = small ? 44 : 58;
+      let x = (dx / m) * L, y = (dy / m) * L;
+      // keep the label's anchor inside the map with a margin
+      x = Math.max(8 - p.x, Math.min(W - 8 - p.x, x)); y = Math.max(8 - p.y, Math.min(H - 24 - p.y, y));
+      const el = co[k].getElement();
+      const line = el.querySelector('line')!;
+      line.setAttribute('x2', String(x)); line.setAttribute('y2', String(y));
+      const lab = el.querySelector('.co-label') as HTMLElement;
+      const right = x >= 0;
+      lab.style.left = `${x}px`; lab.style.top = `${y}px`;
+      lab.style.transform = `translate(${right ? '4px' : 'calc(-100% - 4px)'}, -50%)`;
+      // flip to the other side if the label would run off the map
+      const w = lab.offsetWidth;
+      if (right && p.x + x + 4 + w > W - 4) lab.style.transform = 'translate(calc(-100% - 4px), -50%)';
+      if (!right && p.x + x - 4 - w < 4) lab.style.transform = 'translate(4px, -50%)';
+      placed.push({ k, lab, line, x, y, dir: dy >= 0 ? 1 : -1 });
+    }
+    // labels that still overlap are pushed apart vertically (the later one moves), leader lines follow
+    for (let i = 1; i < placed.length; i++) {
+      for (let j = 0; j < i; j++) {
+        const a = placed[j].lab.getBoundingClientRect(), b = placed[i].lab.getBoundingClientRect();
+        const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+        const oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        if (ox > 0 && oy > 0) {
+          const q = placed[i];
+          const down = b.top + b.height / 2 >= a.top + a.height / 2;
+          q.y += (down ? 1 : -1) * (oy + 4);
+          q.lab.style.top = `${q.y}px`;
+          q.line.setAttribute('y2', String(q.y));
+        }
+      }
+    }
+  }
 
   // print: WebGL canvases often print blank, so render one frame now and print an image of it instead
   const printImg = useRef<HTMLImageElement>(null);
@@ -379,6 +444,7 @@ export function MapView(p: MapProps) {
   return (
     <>
       <div ref={el} className="map" aria-label="Map: draw the plot, pick the road edge" />
+      <button type="button" className="labels-btn" aria-pressed={labelsAll} onClick={() => setLabelsAll(!labelsAll)}>{labelsAll ? 'Fewer labels' : 'Labels'}</button>
       <img ref={printImg} className="map-print" alt="Map snapshot for printing" />
     </>
   );

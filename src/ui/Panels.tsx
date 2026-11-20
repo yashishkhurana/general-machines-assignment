@@ -5,7 +5,7 @@ import { lowRiseMargins } from '../core/checklist';
 import type { Results } from '../core/compute';
 import type { Concept } from '../core/concepts';
 import { planeRange } from '../core/envelope';
-import { parseDecimal } from '../core/format';
+import { parseDecimal, refusedText } from '../core/format';
 import { parkingAreaPerSpace } from '../core/metrics';
 import { RULES, SUPPORTED_ZONES, rule, zoneFar, zoneOsr, type Rule, type Zone } from '../core/rules';
 import type { RoadEdgeInput, Settings } from '../core/types';
@@ -34,12 +34,12 @@ function Num(p: { label: string; value: number; onChange: (v: number) => void; u
           onChange={(e) => {
             setTxt(e.target.value);
             const r = parseDecimal(e.target.value);
-            if (r.ok) { setErr(null); p.onChange(r.value); } else setErr(r.error);
+            if (r.ok) { setErr(null); p.onChange(r.value); } else setErr(r.incomplete ? null : r.error);
           }}
           onBlur={() => { if (!err) setTxt(null); }} />
         {p.unit && <em>{p.unit}</em>}
       </span>
-      {err ? <small id={`${p.id}-err`} className="field-err">{err}</small> : p.hint ? <small>{p.hint}</small> : null}
+      {err ? <small id={`${p.id}-err`} className="field-err" role="status">{refusedText(err, p.value, p.unit)}</small> : p.hint ? <small>{p.hint}</small> : null}
     </label>
   );
 }
