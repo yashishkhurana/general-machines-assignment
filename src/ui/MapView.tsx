@@ -15,6 +15,11 @@ import type { AppState, Tool } from './state';
 
 maplibregl.setWorkerUrl(workerUrl);
 
+// Opening camera: from across Soi 39, looking at the plot's road side (west-south-west), so no tower stands
+// between the camera and the Soi 39 example. Chosen by comparing bearings at phone and desktop sizes.
+const DEFAULT_BEARING = -110;
+const DEFAULT_PITCH = 55;
+
 export const COLORS = {
   plot: '#1d1f22', road: '#d1352b', strip: '#d1352b', fpHigh: '#2f6fdf', fpLow: '#1f9e8f',
   envHigh: '#2f6fdf', envLow: '#1f9e8f', residential: '#e8833a', parking: '#7a64b8', fire: '#9aa3ad',
@@ -79,7 +84,7 @@ export function MapView(p: MapProps) {
       const ring = props.current.state.ring;
       const c = ring.length ? ring.reduce((a, b) => [a[0] + b[0] / ring.length, a[1] + b[1] / ring.length], [0, 0]) : [100.5711, 13.7338];
       const map = new maplibregl.Map({
-        container: el.current, style, center: c as LL, zoom: 17.3, pitch: 55, bearing: -20, maxPitch: 75,
+        container: el.current, style, center: c as LL, zoom: el.current.clientWidth < 600 ? 17.3 : 17.9, pitch: DEFAULT_PITCH, bearing: DEFAULT_BEARING, maxPitch: 75,
         attributionControl: false, canvasContextAttributes: { preserveDrawingBuffer: true, antialias: true },
       } as any);
       mapRef.current = map;
@@ -275,7 +280,9 @@ export function MapView(p: MapProps) {
     const map = mapRef.current, ring = p.state.ring;
     if (!map || ring.length < 3) return;
     const b = ring.reduce((a, c) => [Math.min(a[0], c[0]), Math.min(a[1], c[1]), Math.max(a[2], c[0]), Math.max(a[3], c[1])], [Infinity, Infinity, -Infinity, -Infinity]);
-    map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 160, maxZoom: 18, pitch: 55, bearing: -20, duration: 600 });
+    const el2 = map.getContainer();
+    const padding = Math.round(Math.max(20, Math.min(160, 0.2 * Math.min(el2.clientWidth, el2.clientHeight))));
+    map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding, maxZoom: 18, pitch: DEFAULT_PITCH, bearing: DEFAULT_BEARING, duration: 600 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.fitKey]);
 
