@@ -20,8 +20,9 @@ describe('huge and odd plots', () => {
     console.log(`huge plot: ${ms.toFixed(0)} ms; A ${r.concepts[0]?.concept.total.toFixed(0)} m², B ${r.concepts[1]?.concept.total.toFixed(0)} m²`);
     expect(internal(r)).toEqual([]);
     expect(r.ok).toBe(true);
-    expect(r.concepts[1].concept.ok).toBe(true); // low-rise plate shrinks to stay under 10,000 m²
-    expect(r.concepts[1].concept.total).toBeLessThan(10000);
+    const low = r.candidates.find((c) => c.key === 'lowBasement')!.concept!;
+    expect(low.ok).toBe(true); // low-rise plate shrinks to stay under 10,000 m²
+    expect(low.total).toBeLessThan(10000);
     expect(ms).toBeLessThan(3000);
   });
   it('star, U-shape, 64-gon, thin wedge and a plot with a near-duplicate vertex all compute', () => {

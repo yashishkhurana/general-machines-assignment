@@ -1,4 +1,5 @@
-// Two concept generators. Both add floors until the first limit binds: permitted floor area, the class cap,
+// Concept generators: a tower (parking podium or basements) and a low-rise block (basements or parking floors).
+// Each adds floors until the first limit binds: permitted floor area, the class cap,
 // the height plane, open space, or parking. Parking counts toward floor area.
 import { clean, intersection, mpArea, mpBounds, mpPerimeter, offsetRight, stripsUnion, union, difference, segmentBuffer, type MultiPoly, type Pt } from './geom';
 import { classify, type Availability, type BuildingClass } from './classify';
@@ -21,10 +22,13 @@ export interface Floor {
   spaces: number;
 }
 
+/** Candidate identity; stable across rankings (the shown cards are relabelled A and B by rank). */
+export type ConceptKey = 'towerPodium' | 'towerBasement' | 'lowBasement' | 'lowPodium';
 export interface Concept {
   id: 'A' | 'B';
+  key: ConceptKey;
   title: string;
-  kind: 'tower' | 'low-rise basement' | 'low-rise podium';
+  kind: 'tower' | 'tower basement' | 'low-rise basement' | 'low-rise podium';
   ok: boolean; // produced a building
   reason: string | null; // why not, if !ok
   floors: Floor[];
@@ -44,6 +48,10 @@ export interface Concept {
   notes: string[];
   roofPlantOk: boolean | null;
 }
+
+export const isTower = (c: Pick<Concept, 'kind'>) => c.kind === 'tower' || c.kind === 'tower basement';
+/** Basement storey depth and the most basements a generator tries (modelling assumptions, not rules). */
+const BASEMENT_DEPTH = 3.0, MAX_BASEMENTS = 4;
 
 const fmt = (x: number, d = 0) => x.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 
@@ -113,10 +121,14 @@ function roofPlantFits(site: Site, top: MultiPoly, roofDeck: number) {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Concept A: tower on a parking podium (high-rise class)
+// Tower (high-rise class): parking on podium floors, or in basements under the tower and its fire ring
 // ------------------------------------------------------------------------------------------------
 
-export function conceptTower(site: Site, s: Settings, permitted: number, osr: number, avail: Availability): Concept {
+export function conceptTower(site: Site, s: Settings, permitted: number, osr: number, avail: Availability, parking: 'podium' | 'basement' = 'podium'): Concept {
+  const basement = parking === 'basement';
+  const key: ConceptKey = basement ? 'towerBasement' : 'towerPodium';
+  const title = basement ? 'Tower, basement parking' : 'Tower on podium';
+  const kind: Concept['kind'] = basement ? 'tower basement' : 'tower';
   const aps = parkingAreaPerSpace(s);
   const fp = highRiseFootprint(site);
   let cap = permitted, capLabel = 'permitted floor area (zone ratio + bonus)';
@@ -125,26 +137,39 @@ export function conceptTower(site: Site, s: Settings, permitted: number, osr: nu
   if (reg33cap < cap) { cap = reg33cap; capLabel = 'Reg. 33 cl. 5 ratio cap'; }
   const notes: string[] = [];
 
-  const stack = (plate0: MultiPoly) => {
+  // P = podium parking floors, or (basement) basement levels under basePlate
+  const stack = (plate0: MultiPoly, basePlate: MultiPoly) => {
     const { plates, stop } = platesUnderPlane(site, plate0, s, rule('a.maxFloors'));
+    const bArea = mpArea(basePlate);
     let best: ReturnType<typeof build> | null = null;
     function build(P: number) {
       const floors: Floor[] = [];
-      let total = 0, residential = 0, parkingArea = 0, spaces = 0, binding = stop;
-      for (let k = 0; k < plates.length; k++) {
+      let total = 0, residential = 0, parkingArea = 0, spaces = 0, binding = stop, capped = false;
+      if (basement) {
+        for (let b = 1; b <= P; b++) {
+          if (total + bArea > cap + 1e-6) { binding = capLabel; capped = true; break; }
+          const sp = spacesOn(bArea, aps);
+          total += bArea; spaces += sp; parkingArea += bArea;
+          floors.push({ level: `B${b}`, use: 'basement parking', plate: basePlate, area: bArea, z0: -b * BASEMENT_DEPTH, z1: -(b - 1) * BASEMENT_DEPTH, running: total, spaces: sp });
+        }
+      }
+      for (let k = 0; k < plates.length && !capped; k++) {
         const pl = plates[k];
         if (total + pl.area > cap + 1e-6) { binding = capLabel; break; }
-        const isPark = k < P;
+        const isPark = !basement && k < P;
         const sp = isPark ? spacesOn(pl.area, aps) : 0;
         total += pl.area; spaces += sp;
         if (isPark) parkingArea += pl.area; else residential += pl.area;
         floors.push({ level: String(k + 1), use: isPark ? 'parking' : 'residential', plate: pl.plate, area: pl.area, z0: pl.z0, z1: pl.z1, running: total, spaces: sp });
       }
-      const roofDeck = floors.length ? floors[floors.length - 1].z1 : 0;
+      if (basement) { let run = 0; for (const f of floors.sort((x, y) => levelOrder(x.level) - levelOrder(y.level))) { run += f.area; f.running = run; } }
+      const above = floors.filter((f) => !f.level.startsWith('B'));
+      const roofDeck = above.length ? above[above.length - 1].z1 : 0;
       const need = parkingNeed(total, residential, roofDeck, s);
       return { floors, total, residential, parkingArea, spaces, binding, roofDeck, need, ok: spaces >= need.needed };
     }
-    for (let P = 0; P <= plates.length; P++) {
+    const maxP = basement ? (bArea >= aps ? MAX_BASEMENTS : 0) : plates.length;
+    for (let P = 0; P <= maxP; P++) {
       const r = build(P);
       if (!best || r.ok || r.residential > 0) best = r;
       if (r.ok) break;
@@ -154,16 +179,19 @@ export function conceptTower(site: Site, s: Settings, permitted: number, osr: nu
   };
 
   const check = (plate0: MultiPoly) => {
-    const st = stack(plate0);
+    const ring = fireRing(site, plate0, rule('hr.fireRoad'));
+    // basements: inside the 6 m setback (Reg. 33 cl. 4 applies below ground), under the tower and the paved
+    // fire ring only, so the ground counted as planted has no basement under it
+    const basePlate = basement ? clean(intersection(fp.mp, union(plate0, ring)), 0.5) : [];
+    const st = stack(plate0, basePlate);
     const maxPlate = Math.max(0, ...st.floors.map((f) => f.area));
     const req = openSpaceRequired(st.total, maxPlate, site.netArea, osr, true);
     const provided = site.netArea - mpArea(plate0);
-    const ring = fireRing(site, plate0, rule('hr.fireRoad'));
     const plantedCapacity = provided - mpArea(ring);
     return { st, req, provided, ring, plantedCapacity, ok: provided >= req.governing - 1e-6 && plantedCapacity >= req.plantedB - 1e-6 };
   };
 
-  if (fp.area < rule('a.minPlate')) return emptyConcept('A', 'Tower on podium', 'tower', fp, `High-rise setbacks (6 m all round) leave ${fmt(fp.area)} m², under the ${rule('a.minPlate')} m² smallest usable plate.`, s, site, osr);
+  if (fp.area < rule('a.minPlate')) return emptyConcept('A', key, title, kind, fp, `High-rise setbacks (6 m all round) leave ${fmt(fp.area)} m², under the ${rule('a.minPlate')} m² smallest usable plate.`, s, site, osr);
 
   let plate0 = fp.mp;
   let c = check(plate0);
@@ -190,11 +218,13 @@ export function conceptTower(site: Site, s: Settings, permitted: number, osr: nu
   if (!c.ok) binding = 'open space';
   else if (!st.ok) binding = 'parking';
   if (!cls.highRise && !cls.extraLarge) notes.push('This result is neither high-rise nor extra-large, so the 6 m high-rise setbacks are stricter than it needs.');
-  const top = st.floors[st.floors.length - 1];
+  const above = st.floors.filter((f) => !f.level.startsWith('B'));
+  const top = above[above.length - 1];
+  if (basement) notes.push(`Basements (${BASEMENT_DEPTH} m each, up to ${MAX_BASEMENTS}) lie under the tower and the paved fire ring, inside the 6 m setback, and not under the planted ground. Their area counts toward floor area.`);
   return {
-    id: 'A', title: 'Tower on podium', kind: 'tower', ok: st.floors.length > 0, reason: st.floors.length ? null : 'No floor fits.',
+    id: 'A', key, title, kind, ok: above.length > 0, reason: above.length ? null : 'No floor fits.',
     floors: st.floors, total: st.total, residential: st.residential, parkingArea: st.parkingArea, cap, capLabel,
-    roofDeck: st.roofDeck, storeys: st.floors.length, basements: 0, cls,
+    roofDeck: st.roofDeck, storeys: above.length, basements: st.floors.length - above.length, cls,
     parking: { ...st.need, provided: st.spaces, areaPerSpace: aps },
     openSpace: { provided: c.provided, req: c.req, plantedCapacity: c.plantedCapacity, plantedC: c.provided * rule('planted.share'), groundPlate: plate0, fireRing: c.ring },
     footprint: fp, binding, notes, roofPlantOk: top ? roofPlantFits(site, top.plate, top.z1) : null,
@@ -202,7 +232,7 @@ export function conceptTower(site: Site, s: Settings, permitted: number, osr: nu
 }
 
 // ------------------------------------------------------------------------------------------------
-// Concept B: low-rise block (under 23 m roof deck and under 10,000 m² in total, parking included)
+// Low-rise block (under 23 m roof deck and under 10,000 m² in total, parking included)
 // ------------------------------------------------------------------------------------------------
 
 /** Largest low-rise plate open space allows: 30% of the land open (Ordinance cl. 52(1)) and open space ≥ 30%
@@ -234,7 +264,7 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
     })();
     lastFp = fp;
     if (fp.area < rule('a.minPlate')) break;
-    const maxK = mode === 'basement' ? 4 : N - 1;
+    const maxK = mode === 'basement' ? MAX_BASEMENTS : N - 1;
     // largest plate open space allows (Ordinance cl. 52(1), Reg. 55 cl. 33)
     const fullPlate = lowRisePlateLimit(site.netArea, fp.area);
     for (let K = 0; K <= maxK; K++) {
@@ -285,7 +315,7 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
         for (let b = 1; b <= K; b++) {
           const sp = spacesOn(a0, aps);
           total += a0; spaces += sp; parkingArea += a0;
-          floors.unshift({ level: `B${b}`, use: 'basement parking', plate: plate0, area: a0, z0: -b * 3.0, z1: -(b - 1) * 3.0, running: total, spaces: sp });
+          floors.unshift({ level: `B${b}`, use: 'basement parking', plate: plate0, area: a0, z0: -b * BASEMENT_DEPTH, z1: -(b - 1) * BASEMENT_DEPTH, running: total, spaces: sp });
         }
         // running totals in table order: basements first
         let run = 0;
@@ -306,12 +336,13 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
 
   const title = mode === 'basement' ? 'Low-rise block, basement parking' : 'Low-rise block, parking floors';
   const kind = mode === 'basement' ? 'low-rise basement' : 'low-rise podium';
+  const key: ConceptKey = mode === 'basement' ? 'lowBasement' : 'lowPodium';
   const pick = best ?? bestAny;
   if (!pick) {
     const why = lastFp && lastFp.area < rule('a.minPlate')
       ? `Low-rise setbacks leave ${fmt(lastFp.area)} m², under the ${rule('a.minPlate')} m² smallest usable plate.`
       : heightStop ? 'The height plane leaves no usable floor.' : 'No low-rise layout fits.';
-    return emptyConcept(id, title, kind, lastFp ?? lowRiseFootprint(site, 1, s.groundFloor), why, s, site, osr);
+    return emptyConcept(id, key, title, kind, lastFp ?? lowRiseFootprint(site, 1, s.groundFloor), why, s, site, osr);
   }
   if (!best) notes.push(`No layout provides enough parking. Shown: the largest layout, which needs ${pick.need.needed} spaces and has ${pick.spaces}.`);
   // what shaped the chosen layout
@@ -327,7 +358,7 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
   const top = pick.floors.filter((f) => !f.level.startsWith('B')).slice(-1)[0];
   const provided = site.netArea - mpArea(pick.plate0);
   return {
-    id, title, kind, ok: true, reason: null, floors: pick.floors, total: pick.total, residential: pick.residential, parkingArea: pick.parkingArea,
+    id, key, title, kind, ok: true, reason: null, floors: pick.floors, total: pick.total, residential: pick.residential, parkingArea: pick.parkingArea,
     cap: Math.min(permitted, xl), capLabel: permitted < xl ? 'permitted floor area' : 'under 10,000 m² (low-rise)',
     roofDeck: pick.roofDeck, storeys: pick.N, basements: mode === 'basement' ? pick.K : 0, cls,
     parking: { ...pick.need, provided: pick.spaces, areaPerSpace: aps },
@@ -341,9 +372,9 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
 const spacesOn = (area: number, aps: number) => Math.floor((area + 0.05) / aps);
 const levelOrder = (l: string) => (l.startsWith('B') ? -Number(l.slice(1)) : Number(l));
 
-function emptyConcept(id: 'A' | 'B', title: string, kind: Concept['kind'], fp: Footprint, reason: string, s: Settings, site: Site, osr: number): Concept {
+function emptyConcept(id: 'A' | 'B', key: ConceptKey, title: string, kind: Concept['kind'], fp: Footprint, reason: string, s: Settings, site: Site, osr: number): Concept {
   return {
-    id, title, kind, ok: false, reason, floors: [], total: 0, residential: 0, parkingArea: 0, cap: 0, capLabel: '', roofDeck: 0, storeys: 0, basements: 0,
+    id, key, title, kind, ok: false, reason, floors: [], total: 0, residential: 0, parkingArea: 0, cap: 0, capLabel: '', roofDeck: 0, storeys: 0, basements: 0,
     cls: classify(0, 0), parking: { ...parkingNeed(0, 0, 0, s), provided: 0, areaPerSpace: parkingAreaPerSpace(s) },
     openSpace: { provided: site.netArea, req: openSpaceRequired(0, 0, site.netArea, osr, false), plantedCapacity: site.netArea, plantedC: 0, groundPlate: [], fireRing: null },
     footprint: fp, binding: 'none', notes: [], roofPlantOk: null,

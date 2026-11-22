@@ -1,13 +1,27 @@
 // compute(inputs) -> results. Everything on screen comes from this one call.
 import { availability, type Availability } from './classify';
 import { checklist, type CheckItem } from './checklist';
-import { conceptLowRise, conceptTower, type Concept } from './concepts';
+import { conceptLowRise, conceptTower, type Concept, type ConceptKey } from './concepts';
+import { fmtVs } from './format';
+import { rule } from './rules';
 import { planeHeightAltAt, planeRange } from './envelope';
 import { highRiseFootprint, lowRiseFootprint, type Footprint } from './footprint';
 import { floorArea, resolveZone, type FloorAreaResult, type ZoneResult } from './metrics';
 import { buildSite } from './site';
 import type { Message, SiteInput, Site } from './types';
 import { validatePlot, validateRoads, validateSettings } from './validate';
+
+/** One generated layout. `skipped` says why a high-rise candidate wasn't generated (then concept is null). */
+export interface Candidate {
+  key: ConceptKey;
+  title: string;
+  concept: Concept | null;
+  checks: CheckItem[];
+  passes: boolean; // produced a building and no checklist line fails
+  skipped: string | null;
+  fit: string; // one line: why this layout suits the plot
+}
+export type Shown = Candidate & { concept: Concept };
 
 export interface Results {
   ok: boolean;
@@ -18,11 +32,58 @@ export interface Results {
   avail: Availability | null;
   footprints: { highRise: Footprint; lowRise: Footprint } | null;
   plane: { atHighRiseFront: number; atLowRiseFront: number; atHighRiseFrontAlt: number; heightTo: 'current' | 'planned' } | null;
-  concepts: { concept: Concept; checks: CheckItem[] }[];
+  /** The two shown as A and B: the best first (ranking in rankCandidates). */
+  concepts: Shown[];
+  /** Every other candidate, in rank order ("Also considered"). */
+  considered: Candidate[];
+  /** All candidates, ranked. */
+  candidates: Candidate[];
+}
+
+const TITLES: Record<ConceptKey, string> = {
+  towerPodium: 'Tower on a parking podium', towerBasement: 'Tower, basement parking',
+  lowBasement: 'Low-rise block, basement parking', lowPodium: 'Low-rise block, parking floors',
+};
+const ORDER: ConceptKey[] = ['towerPodium', 'towerBasement', 'lowBasement', 'lowPodium'];
+
+/** Ranking: candidates that pass every checklist line first, by residential floor area, then by planted ground
+ *  available; then the ones that fail (a building before none, fewer failed lines, more residential area);
+ *  skipped ones last. Ties keep the generation order. */
+export function rankCandidates(cands: Candidate[]): Candidate[] {
+  const fails = (c: Candidate) => c.checks.filter((k) => k.status === 'fail').length;
+  const tier = (c: Candidate) => (c.passes ? 0 : c.concept ? 1 : 2);
+  return [...cands].sort((a, b) => {
+    const t = tier(a) - tier(b);
+    if (t) return t;
+    if (!a.concept || !b.concept) return ORDER.indexOf(a.key) - ORDER.indexOf(b.key);
+    if (!a.passes) {
+      if (a.concept.ok !== b.concept.ok) return a.concept.ok ? -1 : 1;
+      if (fails(a) !== fails(b)) return fails(a) - fails(b);
+    }
+    const r = b.concept.residential - a.concept.residential;
+    if (Math.abs(r) > 0.5) return r;
+    const p = b.concept.openSpace.plantedCapacity - a.concept.openSpace.plantedCapacity;
+    if (Math.abs(p) > 0.5) return p;
+    return ORDER.indexOf(a.key) - ORDER.indexOf(b.key);
+  });
+}
+
+const n1 = (x: number) => x.toLocaleString('en-US', { maximumFractionDigits: 1 });
+function fitNote(key: ConceptKey, avail: Availability): string {
+  if (key === 'towerPodium' || key === 'towerBasement') {
+    const access = `${fmtVs(avail.accessFrontage, rule('access.frontage'))} m frontage on a ${fmtVs(avail.accessRoadCurrent, rule('access.road'))} m road allows a high-rise`;
+    return key === 'towerPodium' ? `${access}; parking floors in the podium avoid digging basements.` : `${access}; basement parking leaves every floor above ground for flats.`;
+  }
+  const park = key === 'lowBasement' ? 'basement parking leaves every floor above ground for flats' : 'parking floors avoid digging basements';
+  if (!avail.highRise) {
+    const why = (avail.reasons[0] ?? '').replace(/\s*\(Reg\. 33 cl\. 2[^)]*\)\.?$/, '').replace(/\.$/, '');
+    return `No high-rise here (${why.replace(/^\w/, (x) => x.toLowerCase())}); ${park}.`;
+  }
+  return `Under ${rule('class.highrise.height')} m and ${n1(rule('class.extralarge.area'))} m², so the 6 m setbacks and fire road don't apply; ${park}.`;
 }
 
 const empty = (messages: Message[], site: Site | null = null, zone: ZoneResult | null = null): Results => ({
-  ok: false, messages, site, zone, far: null, avail: null, footprints: null, plane: null, concepts: [],
+  ok: false, messages, site, zone, far: null, avail: null, footprints: null, plane: null, concepts: [], considered: [], candidates: [],
 });
 
 export function compute(input: SiteInput): Results {
@@ -55,24 +116,34 @@ export function compute(input: SiteInput): Results {
     if (lowRise.area < 1) messages.push({ level: 'warn', code: 'noBuildable', text: 'Setbacks leave no buildable area for a low-rise building.' });
     if (highRise.area < 1) messages.push({ level: 'warn', code: 'noBuildableHR', text: 'High-rise setbacks (6 m all round) leave no buildable area.' });
 
-    const concepts: Results['concepts'] = [];
+    const cands: Candidate[] = [];
+    const add = (key: ConceptKey, make: () => Concept, kind: 'tower' | 'low') => {
+      const concept = make();
+      const checks = checklist(concept, site, avail, s, far.permitted, kind);
+      cands.push({ key, title: TITLES[key], concept, checks, passes: concept.ok && !checks.some((k) => k.status === 'fail'), skipped: null, fit: fitNote(key, avail) });
+    };
     if (avail.highRise) {
-      const A = conceptTower(site, s, far.permitted, far.osrWeighted, avail);
-      concepts.push({ concept: A, checks: checklist(A, site, avail, s, far.permitted, 'tower') });
+      add('towerPodium', () => conceptTower(site, s, far.permitted, far.osrWeighted, avail, 'podium'), 'tower');
+      add('towerBasement', () => conceptTower(site, s, far.permitted, far.osrWeighted, avail, 'basement'), 'tower');
     } else {
-      messages.push({ level: 'warn', code: 'noHighRise', text: `High-rise and extra-large classes are unavailable: ${avail.reasons.join(' ')} Concept A is replaced by a second low-rise layout (parking floors above ground).` });
-      const A = conceptLowRise(site, s, far.permitted, far.osrWeighted, 'podium', 'A');
-      concepts.push({ concept: A, checks: checklist(A, site, avail, s, far.permitted, 'low') });
+      const why = avail.reasons.join(' ');
+      for (const key of ['towerPodium', 'towerBasement'] as const) cands.push({ key, title: TITLES[key], concept: null, checks: [], passes: false, skipped: why, fit: '' });
+      messages.push({ level: 'warn', code: 'noHighRise', text: `High-rise and extra-large classes are unavailable: ${why} Only low-rise layouts are compared.` });
     }
-    const B = conceptLowRise(site, s, far.permitted, far.osrWeighted, 'basement', 'B');
-    concepts.push({ concept: B, checks: checklist(B, site, avail, s, far.permitted, 'low') });
+    add('lowBasement', () => conceptLowRise(site, s, far.permitted, far.osrWeighted, 'basement'), 'low');
+    add('lowPodium', () => conceptLowRise(site, s, far.permitted, far.osrWeighted, 'podium'), 'low');
+
+    const candidates = rankCandidates(cands);
+    const concepts = candidates.filter((c): c is Shown => c.concept !== null).slice(0, 2);
+    concepts.forEach((c, i) => { c.concept.id = i === 0 ? 'A' : 'B'; });
+    const considered = candidates.filter((c) => !concepts.includes(c as Shown));
     for (const { concept } of concepts) {
       if (!concept.ok && concept.reason) messages.push({ level: 'warn', code: `concept${concept.id}`, text: `Concept ${concept.id}: ${concept.reason}` });
     }
     if (concepts.every((c) => !c.concept.ok) && concepts.some((c) => /height plane/.test(c.concept.reason ?? ''))) {
       messages.push({ level: 'warn', code: 'planeNoFloor', text: 'The height plane leaves no usable floor.' });
     }
-    return { ok: true, messages, site, zone, far, avail, footprints: { highRise, lowRise }, plane, concepts };
+    return { ok: true, messages, site, zone, far, avail, footprints: { highRise, lowRise }, plane, concepts, considered, candidates };
   } catch (e) {
     messages.push({ level: 'error', code: 'internal', text: `Calculation failed on this shape (${(e as Error).message}). Try moving a corner slightly.` });
     return empty(messages);

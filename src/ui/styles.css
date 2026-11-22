@@ -90,6 +90,13 @@ details.assume > :not(summary) + :not(summary) { margin-top: 10px; }
 .switch button.on { border: 2px solid var(--ink); padding: 9px 13px; background: var(--panel); color: var(--ink); }
 .switch b { font-family: var(--head); font-size: 15px; font-weight: 600; }
 .switch span { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.switch .fit { margin-top: 4px; font-size: 12.5px; line-height: 1.4; }
+.considered h2 { font-size: 15px; font-weight: 600; color: var(--muted); }
+.considered ul { margin: 6px 0 0; padding: 0; list-style: none; }
+.considered li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); line-height: 1.4; }
+.considered-head { display: flex; justify-content: space-between; gap: 10px; color: var(--ink); font-size: 14px; }
+.considered-head b { font-weight: 600; }
+.considered-head span { flex: none; }
 .notices { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .notices li { font-size: 14px; padding: 8px 12px; border-radius: 8px; background: #FFF4E0; color: #5C3D00; }
 .limits { display: flex; flex-direction: column; gap: 16px; }
@@ -195,6 +202,6 @@ section.results > .foot { margin: 0; }
   section.results > * + * { margin-top: 14px; }
   details > :not(summary) { display: block !important; }
   details.floors-d { break-inside: auto; }
-  tr { break-inside: avoid; }
+  tr, .considered li { break-inside: avoid; }
   .bar-fill { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }

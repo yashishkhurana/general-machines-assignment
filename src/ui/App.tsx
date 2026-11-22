@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { compute } from '../core/compute';
+import { isTower } from '../core/concepts';
 import { fmtVs } from '../core/format';
 import { pointInRing, type Pt } from '../core/geom';
 import { rule, type Zone } from '../core/rules';
@@ -9,7 +10,7 @@ import { soi39Example } from '../geo/example';
 import { estimateFrontage } from '../geo/roadWidth';
 import { toSiteInput } from '../geo/siteInput';
 import { MapView } from './MapView';
-import { Checks, ConceptSwitch, Credits, Floors, Limits, Notices, RulesView, Setup, ToolHint, Verdict, n0, n1 } from './Panels';
+import { AlsoConsidered, Checks, ConceptSwitch, Credits, Floors, Limits, Notices, RulesView, Setup, ToolHint, Verdict, n0, n1 } from './Panels';
 import { encodeState, exampleState, isExample, readLink, remapRoads, type AppState, type Tool, type ViewState } from './state';
 import { createUrlWriter } from './urlWriter';
 
@@ -119,10 +120,20 @@ export function App() {
   };
   const chooseTool = (t: Tool) => { setTool(t); if (t === 'measure') { setMeasure([]); setView({ satellite: true }); } if (t !== 'edit') setEditing(false); };
   const which: 'A' | 'B' = state.view.concept === 'B' ? 'B' : 'A';
-  const chooseConcept = (c: 'A' | 'B') => setView({ concept: c, envelope: state.view.envelope === 'none' ? 'none' : c === 'B' ? 'lowRise' : 'highRise' });
+  const chooseConcept = (c: 'A' | 'B') => { const k = results.concepts.find((x) => x.concept.id === c)?.concept; setView({ concept: c, envelope: state.view.envelope === 'none' ? 'none' : k && !isTower(k) ? 'lowRise' : 'highRise' }); };
   const openRules = (a: string) => setRules(a || 'top');
 
   const sel = results.concepts.find((c) => c.concept.id === which) ?? results.concepts[0];
+  // the ranking can swap A and B when the plot or a setting changes: keep the same layout selected if still shown
+  const lastSel = useRef<{ results: typeof results; key: string | null } | null>(null);
+  useEffect(() => {
+    const prev = lastSel.current;
+    if (prev && prev.results !== results && prev.key) {
+      const keep = results.concepts.find((c) => c.key === prev.key);
+      if (keep && keep.concept.id !== which) { lastSel.current = { results, key: prev.key }; setView({ concept: keep.concept.id }); return; }
+    }
+    lastSel.current = { results, key: results.concepts.find((c) => c.concept.id === which)?.key ?? null };
+  }, [results, which]);
   const atExample = isExample(state);
   // the road-width caveat, as one line
   const r0 = state.roads[0], est = estimates[0];
@@ -135,7 +146,7 @@ export function App() {
   const roadName = est?.road?.properties['name:en'] ?? est?.road?.properties.name;
   const err = results.messages.find((m) => m.level === 'error');
   const summary = !err && results.far && sel?.concept.ok
-    ? `${sel.concept.kind === 'tower' ? `${sel.concept.storeys}-storey tower` : `${sel.concept.storeys}-storey block`}: ${n0(sel.concept.total)} of ${n0(results.far.permitted)} m² allowed`
+    ? `${isTower(sel.concept) ? `${sel.concept.storeys}-storey tower` : `${sel.concept.storeys}-storey block`}: ${n0(sel.concept.total)} of ${n0(results.far.permitted)} m² allowed`
     : (err ? 'No result: see below' : 'Draw a plot to start');
 
   return (
@@ -168,6 +179,7 @@ export function App() {
             {atExample && !badLink && <p className="intro">Example: a 2,000 m² plot on Sukhumvit Soi 39, 1,910 m² once the road is widened. A is a tower on a podium, B a low-rise block. Draw your own plot, or drag the corners.</p>}
             <Verdict results={results} which={which} />
             {results.concepts.length > 0 && !err && <ConceptSwitch results={results} value={which} onChange={chooseConcept} />}
+            {!err && <AlsoConsidered results={results} />}
             <Notices results={results} />
             {!err && sel?.concept.ok && results.far && <Limits c={sel.concept} results={results} />}
             {!err && sel && <Checks items={sel.checks} roadNote={roadNote} openRules={openRules} />}

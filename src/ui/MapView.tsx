@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { TerraDraw, TerraDrawPolygonMode, TerraDrawSelectMode } from 'terra-draw';
 import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
 import type { Results } from '../core/compute';
+import { isTower } from '../core/concepts';
 import { envelopeMesh } from '../core/envelope';
 import { pointSegDist, type MultiPoly, type Pt } from '../core/geom';
 import { BUILDINGS, ZONES, type LL } from '../geo/data';
@@ -298,7 +299,7 @@ export function MapView(p: MapProps) {
     const fps = r.footprints;
     // the envelope follows the selected option: the tower's, or the low-rise one (when A is a low-rise too)
     const sel = r.concepts.find((c) => c.concept.id === v.concept)?.concept ?? r.concepts[0]?.concept;
-    const envKind: 'highRise' | 'lowRise' | 'none' = v.envelope === 'none' ? 'none' : sel?.kind === 'tower' ? 'highRise' : sel ? 'lowRise' : v.envelope;
+    const envKind: 'highRise' | 'lowRise' | 'none' = v.envelope === 'none' ? 'none' : sel && isTower(sel) ? 'highRise' : sel ? 'lowRise' : v.envelope;
     set('fpHigh', fc(fps && envKind === 'highRise' ? mpToLL(frame, fps.highRise.mp) : []));
     set('fpLow', fc(fps && envKind === 'lowRise' ? mpToLL(frame, fps.lowRise.mp) : []));
     const concept = r.concepts.find((c) => c.concept.id === v.concept)?.concept;

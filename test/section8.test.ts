@@ -193,7 +193,7 @@ describe('missing fixtures from the §8 review', () => {
   it('deep plot on a narrow road: the height plane binds before floor area', () => {
     const deep: Ring = [[0, 0], [16, 0], [16, 100], [0, 100]];
     const r = compute(input({ plot: deep, roads: road(4) }));
-    const b = r.concepts.find((c) => c.concept.id === 'B')!.concept;
+    const b = r.candidates.find((c) => c.key === 'lowBasement')!.concept!;
     expect(r.avail!.highRise).toBe(false); // 4 m soi
     expect(b.total).toBeLessThan(r.far!.permitted);
     // upper floors step back from the road
@@ -250,16 +250,16 @@ describe('validation (§6)', () => {
 describe('concepts on the fixture', () => {
   const r = compute(input());
   it('concept A (tower) stays within 16,000 m² and parks its count', () => {
-    const a = r.concepts[0].concept;
+    const a = r.candidates.find((c) => c.key === 'towerPodium')!.concept!;
     expect(a.kind).toBe('tower');
     expect(a.total).toBeLessThanOrEqual(16000 + 1e-6);
     expect(a.parking.provided).toBeGreaterThanOrEqual(a.parking.needed);
     expect(a.cls.highRise).toBe(true);
   });
   it('every pass/fail line of both concepts passes on the fixture', () => {
-    for (const { concept, checks } of r.concepts) {
+    for (const { key, checks } of r.candidates) {
       const fails = checks.filter((c) => c.status === 'fail');
-      expect(fails.map((f) => `${concept.id}: ${f.label}`)).toEqual([]);
+      expect(fails.map((f) => `${key}: ${f.label}`)).toEqual([]);
     }
   });
 });
@@ -280,7 +280,7 @@ describe('drawing direction', () => {
 describe('break cases found while testing', () => {
   it('roads on opposite sides: low-rise plate trims from both and still fits (was 75 m²)', () => {
     const r = compute(input({ roads: [{ edge: 0, width: 16, current: 16 }, { edge: 2, width: 10, current: 10 }] }));
-    const b = r.concepts.find((c) => c.concept.id === 'B')!.concept;
+    const b = r.candidates.find((c) => c.key === 'lowBasement')!.concept!;
     expect(b.ok).toBe(true);
     expect(mpArea(b.openSpace.groundPlate)).toBeCloseTo(1249, 0);
   });
@@ -351,8 +351,8 @@ describe('W4: planned 16 m line for setbacks and the height plane, current width
 describe('margin to the extra-large line (shown beside the low-rise result)', () => {
   it('fixture low-rise sits 8 m² under 10,000 m² and is flagged as fragile', () => {
     const r = compute(input());
-    const B = r.concepts.find((c) => c.concept.id === 'B')!;
-    const m = lowRiseMargins(B.concept);
+    const B = r.candidates.find((c) => c.key === 'lowBasement')!;
+    const m = lowRiseMargins(B.concept!);
     expect(m.area).toBeCloseTo(8, 0);
     const line = B.checks.find((k) => k.id === 'xlMargin')!;
     expect(line.status).toBe('warn');

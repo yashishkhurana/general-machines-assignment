@@ -2,8 +2,8 @@
 import { useState, type ReactNode } from 'react';
 import type { CheckItem } from '../core/checklist';
 import { lowRiseMargins } from '../core/checklist';
-import type { Results } from '../core/compute';
-import type { Concept } from '../core/concepts';
+import type { Candidate, Results } from '../core/compute';
+import { isTower, type Concept } from '../core/concepts';
 import { planeRange } from '../core/envelope';
 import { parseDecimal, refusedText } from '../core/format';
 import { parkingAreaPerSpace } from '../core/metrics';
@@ -208,9 +208,9 @@ export function Setup(p: SetupProps) {
 
 function verdict(c: Concept, permitted: number): { title: string; why: string } {
   const b = c.binding;
-  if (!c.ok) return { title: c.kind === 'tower' ? 'No tower fits here' : 'No low-rise block fits here', why: c.reason ?? '' };
-  if (c.kind === 'tower') {
-    const title = `A ${c.storeys}-storey tower fits here`;
+  if (!c.ok) return { title: isTower(c) ? 'No tower fits here' : 'No low-rise block fits here', why: c.reason ?? '' };
+  if (isTower(c)) {
+    const title = `A ${c.storeys}-storey tower fits here${c.basements ? `, over ${c.basements} basement${c.basements > 1 ? 's' : ''}` : ''}`;
     let why = `It uses ${n0(c.total)} m² of the ${n0(permitted)} m² this plot allows.`;
     if (/permitted floor area/.test(b)) why += ' Floor area is what stops it: one more floor would go over the limit. The height limit from the road shapes the top.';
     else if (/Reg\. 33 cl\. 2 cap/.test(b)) why += ' It stops at the 30,000 m² cap for roads under 18 m.';
@@ -253,7 +253,7 @@ export function Limits({ c, results }: { c: Concept; results: Results }) {
   const zone = results.zone?.parts.map((p) => p.zone).join(' + ') ?? '';
   const os = c.openSpace;
   const bonus = far.bonusPct.applied;
-  const tower = c.kind === 'tower';
+  const tower = isTower(c);
   const step = firstSteppedFloor(c);
   const top = os.groundPlate.length ? planeRange(site, os.groundPlate) : null;
   const m = lowRiseMargins(c);
@@ -370,12 +370,45 @@ export function Floors({ c }: { c: Concept }) {
 export function ConceptSwitch({ results, value, onChange }: { results: Results; value: 'A' | 'B'; onChange: (v: 'A' | 'B') => void }) {
   return (
     <div className="switch" role="group" aria-label="Design option">
-      {results.concepts.map(({ concept: c }) => (
+      {results.concepts.map(({ concept: c, title, fit, passes }) => (
         <button key={c.id} type="button" aria-pressed={value === c.id} className={value === c.id ? 'on' : ''} onClick={() => onChange(c.id)}>
-          <b>{c.id}. {c.kind === 'tower' ? 'Tower on a podium' : c.kind === 'low-rise podium' ? 'Low-rise, parking floors' : 'Low-rise block'}</b>
-          <span className="fig">{c.ok ? `${c.storeys} floors${c.basements ? ` over ${c.basements} basements` : ''}, ${n0(c.total)} m²` : 'Does not fit'}</span>
+          <b>{c.id}. {title}</b>
+          <span className="fig">{c.ok ? `${c.storeys} floors${c.basements ? ` over ${c.basements} basement${c.basements > 1 ? 's' : ''}` : ''}, ${n0(c.residential)} m² of flats` : 'Does not fit'}</span>
+          <small className="fit">{passes ? fit : 'Shown because fewer than two options pass every check.'}</small>
         </button>
       ))}
+    </div>
+  );
+}
+
+/** One line on why a candidate isn't one of the two shown. */
+function consideredWhy(k: Candidate, results: Results): string {
+  if (k.skipped) return `Not possible here: ${k.skipped}`;
+  const c = k.concept!;
+  if (!c.ok) return `Does not fit: ${c.reason ?? 'no floor fits.'}`;
+  const fails = k.checks.filter((x) => x.status === 'fail');
+  if (fails.length) return `Fails: ${fails.map((x) => plainOf(x).title.replace(/^\w/, (ch) => ch.toLowerCase())).join('; ')}.`;
+  const last = results.concepts[results.concepts.length - 1];
+  const d = last.concept.residential - c.residential;
+  if (d > 0.5) return `${n0(d)} m² less floor area for flats than ${last.concept.id}.`;
+  const g = last.concept.openSpace.plantedCapacity - c.openSpace.plantedCapacity;
+  if (g > 0.5) return `About the same floor area for flats as ${last.concept.id}, with ${n0(g)} m² less planted ground.`;
+  return `Ties with ${last.concept.id}; listed after it.`;
+}
+
+export function AlsoConsidered({ results }: { results: Results }) {
+  if (!results.considered.length) return null;
+  return (
+    <div className="considered">
+      <h2>Also considered</h2>
+      <ul>
+        {results.considered.map((k) => (
+          <li key={k.key}>
+            <div className="considered-head"><b>{k.title}</b><span className="fig">{k.concept?.ok ? `${n0(k.concept.residential)} m² of flats` : '—'}</span></div>
+            <span>{consideredWhy(k, results)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
