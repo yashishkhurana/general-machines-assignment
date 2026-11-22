@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { compute } from '../core/compute';
+import { plotRules } from '../core/plotRules';
 import { isTower } from '../core/concepts';
 import { fmtVs } from '../core/format';
 import { pointInRing, type Pt } from '../core/geom';
@@ -10,7 +11,7 @@ import { soi39Example } from '../geo/example';
 import { estimateFrontage } from '../geo/roadWidth';
 import { toSiteInput } from '../geo/siteInput';
 import { MapView } from './MapView';
-import { AlsoConsidered, Checks, ConceptSwitch, Credits, Floors, Limits, Notices, RulesView, Setup, ToolHint, Verdict, n0, n1 } from './Panels';
+import { AlsoConsidered, Checks, PlotRules, ConceptSwitch, Credits, Floors, Limits, Notices, RulesView, Setup, ToolHint, Verdict, n0, n1 } from './Panels';
 import { encodeState, exampleState, isExample, readLink, remapRoads, type AppState, type Tool, type ViewState } from './state';
 import { createUrlWriter } from './urlWriter';
 
@@ -28,6 +29,7 @@ export function App() {
   const [copied, setCopied] = useState(false);
   const [rules, setRules] = useState<string | null>(null); // null = result; else the anchor to show
   const [editing, setEditing] = useState(false); // phone: setup shown
+  const [hoverEdge, setHoverEdge] = useState<[Pt, Pt] | null>(null); // a setback row's edge, highlighted on the map
   const ringRef = useRef(state.ring);
   ringRef.current = state.ring;
   const stateRef = useRef(state);
@@ -138,6 +140,7 @@ export function App() {
     lastSel.current = { results, key: results.concepts.find((c) => c.concept.id === which)?.key ?? null };
   }, [results, which]);
   const atExample = isExample(state);
+  const ruleRows = useMemo(() => plotRules(results, sel?.concept ?? null, state.settings), [results, sel, state.settings]);
   // the road-width caveat, as one line
   const r0 = state.roads[0], est = estimates[0];
   const roadNote = r0 && est?.gap?.value != null && Number.isFinite(r0.current) ? (() => {
@@ -170,7 +173,8 @@ export function App() {
       </aside>
       <main className="center">
         <MapView state={state} results={results} frame={frame} tool={tool} rays={state.view.rays ? rays : []} measure={measure} demolished={demolished}
-          onRing={onRing} onPickEdge={onPickEdge} onMeasure={setMeasure} onToolDone={() => setTool((t) => (t === 'draw' ? 'edit' : t))} fitKey={fitKey} roadName={roadName} />
+          onRing={onRing} onPickEdge={onPickEdge} onMeasure={setMeasure} onToolDone={() => setTool((t) => (t === 'draw' ? 'edit' : t))} fitKey={fitKey} roadName={roadName}
+          highlight={hoverEdge ? [frame.toLL(hoverEdge[0]), frame.toLL(hoverEdge[1])] : null} />
         <ToolHint tool={tool} measure={measured} />
       </main>
       <section className="results" aria-label="Result">
@@ -185,6 +189,7 @@ export function App() {
             {!err && <AlsoConsidered results={results} />}
             <Notices results={results} />
             {!err && sel?.concept.ok && results.far && <Limits c={sel.concept} results={results} />}
+            {!err && <PlotRules rows={ruleRows} onHoverEdge={setHoverEdge} />}
             {!err && sel && <Checks items={sel.checks} roadNote={roadNote} openRules={openRules} />}
             {!err && sel?.concept.ok && <Floors c={sel.concept} />}
             <p className="foot"><button type="button" className="link" onClick={() => openRules('top')}>All rules and sources</button></p>

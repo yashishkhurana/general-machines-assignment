@@ -26,7 +26,7 @@ const DEFAULT_PITCH = 55;
 export const COLORS = {
   plot: '#17242D', road: '#B93A2B', strip: '#B93A2B', fpHigh: '#56646D', fpLow: '#56646D',
   envHigh: '#1F55C8', envLow: '#1F55C8', residential: '#9A6A4B', parking: '#D8C7B6', fire: '#C9CEC6',
-  building: '#F7F8F5', ground: '#EEF0EC', rays: '#7b3fbf', measure: '#C27A00',
+  building: '#F7F8F5', ground: '#EEF0EC', rays: '#7b3fbf', measure: '#C27A00', highlight: '#E8A317',
 };
 const ZONE_FILL: Record<string, string> = {
   residential_low: '#f3dc6b', residential_medium: '#f0a35b', residential_high: '#a86f3d', commercial: '#d9484a',
@@ -59,6 +59,8 @@ export interface MapProps {
   onToolDone: () => void;
   fitKey: string;
   roadName?: string;
+  /** a plot edge to highlight (a setback row is hovered) */
+  highlight?: LL[] | null;
 }
 
 export function MapView(p: MapProps) {
@@ -115,7 +117,7 @@ export function MapView(p: MapProps) {
         map.addLayer({ id: 'zones-fill', type: 'fill', source: 'zones', paint: { 'fill-color': ['match', ['get', 'category'], ...Object.entries(ZONE_FILL).flat(), '#bbbbbb'] as any, 'fill-opacity': 0.12 } }, firstSymbol);
         map.addLayer({ id: 'zones-line', type: 'line', source: 'zones', paint: { 'line-color': ['match', ['get', 'category'], ...Object.entries(ZONE_FILL).flat(), '#999'] as any, 'line-width': 1.2, 'line-dasharray': [3, 2] } }, firstSymbol);
         map.addLayer({ id: 'zones-label', type: 'symbol', source: 'zones', layout: { 'text-field': ['get', 'zone'], 'text-size': 13, 'text-font': ['Noto Sans Regular'], 'symbol-placement': 'point' }, paint: { 'text-color': '#5a3a1a', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
-        for (const id of ['plot', 'strip', 'fpHigh', 'fpLow', 'fire', 'roadEdges', 'rays', 'measure', 'floors', 'demolished']) map.addSource(id, { type: 'geojson', data: fc([]) });
+        for (const id of ['plot', 'strip', 'fpHigh', 'fpLow', 'fire', 'roadEdges', 'rays', 'measure', 'floors', 'demolished', 'hoverEdge']) map.addSource(id, { type: 'geojson', data: fc([]) });
         map.addSource('buildings', { type: 'geojson', data: BUILDINGS as any });
         const notDemolished: any = ['!', ['in', ['get', 'id'], ['literal', []]]];
         map.addLayer({ id: 'bld-assumed', type: 'fill-extrusion', source: 'buildings', filter: ['all', ['==', ['get', 'src'], 'assumed'], notDemolished], paint: { 'fill-extrusion-color': COLORS.building, 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 0.9 } });
@@ -128,6 +130,7 @@ export function MapView(p: MapProps) {
         map.addLayer({ id: 'plot-fill', type: 'fill', source: 'plot', paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.55 } });
         map.addLayer({ id: 'plot-line', type: 'line', source: 'plot', paint: { 'line-color': COLORS.plot, 'line-width': 2.5 } });
         map.addLayer({ id: 'roadEdges', type: 'line', source: 'roadEdges', paint: { 'line-color': COLORS.road, 'line-width': 4, 'line-opacity': 1 } });
+        map.addLayer({ id: 'hoverEdge', type: 'line', source: 'hoverEdge', layout: { 'line-cap': 'round' }, paint: { 'line-color': COLORS.highlight, 'line-width': 7, 'line-opacity': 0.9 } });
         map.addLayer({ id: 'rays', type: 'line', source: 'rays', paint: { 'line-color': COLORS.rays, 'line-width': 1.5, 'line-opacity': 0.8 } });
         map.addLayer({ id: 'measure', type: 'line', source: 'measure', paint: { 'line-color': COLORS.measure, 'line-width': 3 } });
         map.addLayer({ id: 'floors', type: 'fill-extrusion', source: 'floors', paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-opacity': 0.97 } });
@@ -381,6 +384,13 @@ export function MapView(p: MapProps) {
     map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding, maxZoom: 18, pitch: DEFAULT_PITCH, bearing: DEFAULT_BEARING, duration: reduce ? 0 : 700 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.fitKey]);
+  // a hovered setback row: highlight its plot edge
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready.current) return;
+    const h = p.highlight;
+    (map.getSource('hoverEdge') as GeoJSONSource | undefined)?.setData(fc(h ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: h } }] : []));
+  }, [p.highlight]);
 
   // place each callout label out from the plot, along the line from the plot's centre through its point,
   // with a fixed bias per callout so the three fan apart; keep labels inside the map

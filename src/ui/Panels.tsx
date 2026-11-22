@@ -4,6 +4,8 @@ import type { CheckItem } from '../core/checklist';
 import { lowRiseMargins } from '../core/checklist';
 import type { Candidate, Results } from '../core/compute';
 import { isTower, type Concept } from '../core/concepts';
+import type { RuleRow } from '../core/plotRules';
+import type { Pt } from '../core/geom';
 import { planeRange } from '../core/envelope';
 import { parseDecimal, refusedText } from '../core/format';
 import { parkingAreaPerSpace } from '../core/metrics';
@@ -397,10 +399,55 @@ function consideredWhy(k: Candidate, results: Results): string {
   if (fails.length) return `Fails: ${fails.map((x) => plainOf(x).title.replace(/^\w/, (ch) => ch.toLowerCase())).join('; ')}.`;
   const last = results.concepts[results.concepts.length - 1];
   const d = last.concept.residential - c.residential;
-  if (d > 0.5) return `${n0(d)} m² less floor area for flats than ${last.concept.id}.`;
+  const lim = ` Limited by ${limitText(c)}.`;
+  if (d > 0.5) return `${n0(d)} m² less floor area for flats than ${last.concept.id}.${lim}`;
   const g = last.concept.openSpace.plantedCapacity - c.openSpace.plantedCapacity;
-  if (g > 0.5) return `About the same floor area for flats as ${last.concept.id}, with ${n0(g)} m² less planted ground.`;
-  return `Ties with ${last.concept.id}; listed after it.`;
+  if (g > 0.5) return `About the same floor area for flats as ${last.concept.id}, with ${n0(g)} m² less planted ground.${lim}`;
+  return `Ties with ${last.concept.id}; listed after it.${lim}`;
+}
+
+const OS_NAME = { plan: 'the plan open-space ratio', reg33: '30% of the plot', ord52: '30% of the plot', reg55: '30% of the largest floor' } as const;
+/** What stopped a layout, in words: the height or floor count, and what sized the floor plate. */
+function limitText(c: Concept): string {
+  const b = c.binding;
+  const park = c.floors.filter((f) => f.use === 'parking').length;
+  const floors = `${c.storeys} floors${c.basements ? ` of flats over ${c.basements} basement${c.basements > 1 ? 's' : ''}` : park ? `, ${park} of them parking` : ''}`;
+  const parts: string[] = [];
+  if (/roof deck at most 15 m/.test(b)) parts.push(`the 15 m roof deck for blank side walls (${floors})`);
+  else if (/roof deck under 23 m/.test(b)) parts.push(`the 23 m low-rise roof deck (${floors})`);
+  else if (/^height plane/.test(b)) parts.push(`the height limit from the road (${floors})`);
+  const plate = /plate set by (.*)$/.exec(b)?.[1];
+  if (plate) parts.push(`a floor plate set by ${plate}${plate === 'open space' ? ` (${OS_NAME[c.openSpace.req.binding]})` : ''}`);
+  if (!parts.length) parts.push(b);
+  return parts.join(', with ');
+}
+
+/** "Rules for this plot": each rule worked out on this plot's numbers (rows from core/plotRules). */
+export function PlotRules({ rows, onHoverEdge }: { rows: RuleRow[]; onHoverEdge: (e: [Pt, Pt] | null) => void }) {
+  if (!rows.length) return null;
+  const groups = [...new Set(rows.map((r) => r.group))];
+  return (
+    <details className="plotrules">
+      <summary>Rules for this plot <span className="muted">the working behind every number</span></summary>
+      {groups.map((g) => (
+        <section key={g}>
+          <h3>{g}</h3>
+          <ul>
+            {rows.filter((r) => r.group === g).map((r, i) => {
+              const hl = r.edge ? { onMouseEnter: () => onHoverEdge([r.edge!.a, r.edge!.b]), onMouseLeave: () => onHoverEdge(null), onFocus: () => onHoverEdge([r.edge!.a, r.edge!.b]), onBlur: () => onHoverEdge(null), tabIndex: 0 } : {};
+              return (
+                <li key={i} className={`${r.governs ? 'gov' : ''}${r.edge ? ' edge' : ''}`} {...hl}>
+                  <div className="pr-head"><b>{r.rule}</b><span className="fig">{r.result}</span></div>
+                  <div className="pr-work fig">{r.working}</div>
+                  <div className="pr-meta">{r.clause} · {r.source} · applies to: {r.limits}</div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </details>
+  );
 }
 
 export function AlsoConsidered({ results }: { results: Results }) {

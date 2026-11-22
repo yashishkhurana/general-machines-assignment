@@ -81,6 +81,8 @@ export interface Site {
   netArea: number;
   roads: Road[];
   roadEdgeSet: Set<number>;
+  /** For each edge of `ring`, its index in the plot as drawn (the ring may have been reversed to CCW). */
+  inputEdge: number[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {

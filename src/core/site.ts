@@ -51,6 +51,7 @@ export function buildSite(plot: Ring, roadInputs: RoadEdgeInput[], heightTo: 'cu
   return {
     ring, plotMP, grossArea, stripMP, stripArea: mpArea(stripMP), netMP, netArea: mpArea(netMP),
     roads, roadEdgeSet: new Set(roads.map((r) => r.edge)),
+    inputEdge: ring.map((_, j) => mapEdge(j)), // mapEdge is its own inverse
   };
 }
 
