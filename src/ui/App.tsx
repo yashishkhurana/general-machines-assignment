@@ -150,7 +150,7 @@ export function App() {
   const err = results.messages.find((m) => m.level === 'error');
   const summary = !err && results.far && sel?.concept.ok
     ? `${isTower(sel.concept) ? `${sel.concept.storeys}-storey tower` : `${sel.concept.storeys}-storey block`}: ${n0(sel.concept.total)} of ${n0(results.far.permitted)} m² allowed`
-    : (err ? 'No result: see below' : 'Draw a plot to start');
+    : (err ? 'No result: see below' : results.noFit ? 'No condo fits this plot' : 'Draw a plot to start');
 
   return (
     <div className={`app${editing ? ' editing' : ''}`}>

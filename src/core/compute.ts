@@ -38,7 +38,10 @@ export interface Results {
   considered: Candidate[];
   /** All candidates, ranked. */
   candidates: Candidate[];
+  /** Set when no candidate builds anything: the binding reason and a rough "what would work". */
+  noFit: NoFit | null;
 }
+export interface NoFit { reason: string; suggestion: string | null }
 
 const TITLES: Record<ConceptKey, string> = {
   towerPodium: 'Tower on a parking podium', towerBasement: 'Tower, basement parking',
@@ -68,6 +71,37 @@ export function rankCandidates(cands: Candidate[]): Candidate[] {
   });
 }
 
+/** No candidate builds: the binding reason, and (when the setbacks bind) a rough size that would. */
+function noFitState(site: Site, s: SiteInput['settings'], avail: Availability, cands: Candidate[]): NoFit {
+  const minPlate = rule('a.minPlate');
+  const n0 = (x: number) => x.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  // the most generous footprint: a one-storey low-rise block
+  const fp1 = lowRiseFootprint(site, 1, s.groundFloor);
+  const road = site.roads[0];
+  if (fp1.area >= minPlate || !road) {
+    const low = cands.find((c) => c.key === 'lowBasement')?.concept?.reason;
+    const r = low && /height plane/.test(low) ? `The height limit from the road leaves no floor of ${minPlate} m² or more; the smallest usable floor is ${minPlate} m² (assumed).` : (low ?? cands.find((c) => c.concept?.reason)?.concept?.reason ?? 'No layout fits.');
+    return { reason: r, suggestion: null };
+  }
+  const reason = `Setbacks leave ${n0(fp1.area)} m² to build on; the smallest usable floor is ${minPlate} m² (assumed).`;
+  // treat the plot as a rectangle: the road frontage by (net area / frontage) deep, with the same setbacks
+  const W = road.frontage, D = site.netArea / W;
+  const front = Math.max(...fp1.setbacks.filter((x) => x.road).map((x) => x.setback));
+  const other = Math.max(0, ...fp1.setbacks.filter((x) => !x.road).map((x) => x.setback));
+  const w0 = W - 2 * other, d0 = D - front - other;
+  const up = (x: number) => Math.ceil(x * 10) / 10;
+  const opts: string[] = [];
+  if (d0 > 0) { const dW = up(minPlate / d0 - Math.max(0, w0)); opts.push(`about ${n1(dW)} m more frontage (${n1(W + dW)} m)`); }
+  if (w0 > 0) { const dD = up(minPlate / w0 - Math.max(0, d0)); opts.push(`about ${n1(dD)} m more depth (${n1(D + dD)} m)`); }
+  let suggestion = opts.length
+    ? `Rough estimate, treating the plot as a ${n1(W)} × ${n1(D)} m rectangle with these setbacks: ${opts.join(' or ')} would give a ${minPlate} m² floor.`
+    : `Rough estimate: the plot would need to be larger in both directions to give a ${minPlate} m² floor.`;
+  if (!avail.highRise && W < rule('access.frontage')) {
+    suggestion += ` A frontage of ${rule('access.frontage')} m or more also allows a high-rise${road.current < rule('access.road') ? `, if the road is also at least ${rule('access.road')} m wide` : ''}.`;
+  }
+  return { reason, suggestion };
+}
+
 const n1 = (x: number) => x.toLocaleString('en-US', { maximumFractionDigits: 1 });
 function fitNote(key: ConceptKey, avail: Availability): string {
   if (key === 'towerPodium' || key === 'towerBasement') {
@@ -84,7 +118,7 @@ function fitNote(key: ConceptKey, avail: Availability): string {
 }
 
 const empty = (messages: Message[], site: Site | null = null, zone: ZoneResult | null = null): Results => ({
-  ok: false, messages, site, zone, far: null, avail: null, footprints: null, plane: null, concepts: [], considered: [], candidates: [],
+  ok: false, messages, site, zone, far: null, avail: null, footprints: null, plane: null, concepts: [], considered: [], candidates: [], noFit: null,
 });
 
 export function compute(input: SiteInput): Results {
@@ -114,8 +148,9 @@ export function compute(input: SiteInput): Results {
     const pr = (fp: Footprint) => (fp.area > 0 ? planeRange(site, fp.mp).min : 0);
     const prAlt = (fp: Footprint) => (fp.area > 0 ? Math.min(...fp.mp.flatMap((poly) => poly[0].map((p) => planeHeightAltAt(site, p)))) : 0);
     const plane = { atHighRiseFront: pr(highRise), atLowRiseFront: pr(lowRise), atHighRiseFrontAlt: prAlt(highRise), heightTo: input.settings.heightTo ?? 'current' };
-    if (lowRise.area < 1) messages.push({ level: 'warn', code: 'noBuildable', text: 'Setbacks leave no buildable area for a low-rise building.' });
-    if (highRise.area < 1) messages.push({ level: 'warn', code: 'noBuildableHR', text: 'High-rise setbacks (6 m all round) leave no buildable area.' });
+    // both are stated again by a candidate's reason (Also considered, or the no-fit headline): kept as notes only
+    if (lowRise.area < 1) messages.push({ level: 'info', code: 'noBuildable', text: 'Setbacks leave no buildable area for a low-rise building.' });
+    if (highRise.area < 1) messages.push({ level: 'info', code: 'noBuildableHR', text: 'High-rise setbacks (6 m all round) leave no buildable area.' });
 
     const cands: Candidate[] = [];
     const add = (key: ConceptKey, make: () => Concept, kind: 'tower' | 'low') => {
@@ -130,21 +165,22 @@ export function compute(input: SiteInput): Results {
       const why = avail.reasons.join(' ');
       for (const key of ['towerPodium', 'towerBasement'] as const) cands.push({ key, title: TITLES[key], concept: null, checks: [], passes: false, skipped: why, fit: '' });
       messages.push({ level: 'warn', code: 'noHighRise', text: `High-rise and extra-large classes are unavailable: ${why} Only low-rise layouts are compared.` });
+      // said once: the short-frontage warning repeats this reason
+      for (const m of messages) if (m.code === 'shortFrontage') m.level = 'info';
     }
     add('lowBasement', () => conceptLowRise(site, s, far.permitted, far.osrWeighted, 'basement'), 'low');
     add('lowPodium', () => conceptLowRise(site, s, far.permitted, far.osrWeighted, 'podium'), 'low');
 
     const candidates = rankCandidates(cands);
-    const concepts = candidates.filter((c): c is Shown => c.concept !== null).slice(0, 2);
+    // only layouts with floors get a card; the rest (with their reasons) go under Also considered
+    const concepts = candidates.filter((c): c is Shown => c.concept !== null && c.concept.ok).slice(0, 2);
     concepts.forEach((c, i) => { c.concept.id = i === 0 ? 'A' : 'B'; });
     const considered = candidates.filter((c) => !concepts.includes(c as Shown));
-    for (const { concept } of concepts) {
-      if (!concept.ok && concept.reason) messages.push({ level: 'warn', code: `concept${concept.id}`, text: `Concept ${concept.id}: ${concept.reason}` });
+    const noFit = concepts.length ? null : noFitState(site, s, avail, candidates);
+    if (noFit && candidates.some((c) => /height plane/.test(c.concept?.reason ?? ''))) {
+      messages.push({ level: 'info', code: 'planeNoFloor', text: 'The height plane leaves no usable floor.' });
     }
-    if (concepts.every((c) => !c.concept.ok) && concepts.some((c) => /height plane/.test(c.concept.reason ?? ''))) {
-      messages.push({ level: 'warn', code: 'planeNoFloor', text: 'The height plane leaves no usable floor.' });
-    }
-    return { ok: true, messages, site, zone, far, avail, footprints: { highRise, lowRise }, plane, concepts, considered, candidates };
+    return { ok: true, messages, site, zone, far, avail, footprints: { highRise, lowRise }, plane, concepts, considered, candidates, noFit };
   } catch (e) {
     messages.push({ level: 'error', code: 'internal', text: `Calculation failed on this shape (${(e as Error).message}). Try moving a corner slightly.` });
     return empty(messages);

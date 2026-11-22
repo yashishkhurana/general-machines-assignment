@@ -299,7 +299,9 @@ export function MapView(p: MapProps) {
     const fps = r.footprints;
     // the envelope follows the selected option: the tower's, or the low-rise one (when A is a low-rise too)
     const sel = r.concepts.find((c) => c.concept.id === v.concept)?.concept ?? r.concepts[0]?.concept;
-    const envKind: 'highRise' | 'lowRise' | 'none' = v.envelope === 'none' ? 'none' : sel && isTower(sel) ? 'highRise' : sel ? 'lowRise' : v.envelope;
+    // with no layout shown (nothing fits), show the envelope of the class the plot can have
+    const envKind: 'highRise' | 'lowRise' | 'none' = v.envelope === 'none' ? 'none' : sel ? (isTower(sel) ? 'highRise' : 'lowRise')
+      : r.avail?.highRise && (fps?.highRise.area ?? 0) > 0 ? 'highRise' : 'lowRise';
     set('fpHigh', fc(fps && envKind === 'highRise' ? mpToLL(frame, fps.highRise.mp) : []));
     set('fpLow', fc(fps && envKind === 'lowRise' ? mpToLL(frame, fps.lowRise.mp) : []));
     const concept = r.concepts.find((c) => c.concept.id === v.concept)?.concept;

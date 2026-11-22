@@ -103,3 +103,43 @@ describe('every candidate on every fixture', () => {
     }
   });
 });
+
+describe('no candidate builds anything', () => {
+  const r = onRoad(9, 20, 10);
+  it('9 × 20 m on a 10 m road: one "no condo fits" state with a single reason, no cards', () => {
+    expect(r.concepts).toEqual([]);
+    expect(r.noFit).not.toBeNull();
+    expect(r.noFit!.reason).toBe('Setbacks leave 85 m² to build on; the smallest usable floor is 100 m² (assumed).');
+    expect(r.candidates.every((c) => !c.concept?.ok)).toBe(true);
+    expect(r.considered.map((c) => c.key).sort()).toEqual(['lowBasement', 'lowPodium', 'towerBasement', 'towerPodium']);
+  });
+  it('suggests a size that would work, as an estimate, and mentions the 12 m frontage', () => {
+    const sug = r.noFit!.suggestion!;
+    expect(sug).toMatch(/^Rough estimate/);
+    expect(sug).toContain('about 0.9 m more frontage (9.9 m)');
+    expect(sug).toContain('about 3 m more depth (23 m)');
+    expect(sug).toContain('A frontage of 12 m or more also allows a high-rise.');
+    // the estimate holds on this rectangle: either size builds
+    expect(onRoad(9.9, 20, 10).concepts.length).toBeGreaterThan(0);
+    expect(onRoad(9, 23, 10).concepts.length).toBeGreaterThan(0);
+  });
+  it('notices are not duplicated: high-rise unavailable said once, no per-concept reasons', () => {
+    const warns = r.messages.filter((m) => m.level === 'warn');
+    expect(warns.map((m) => m.code)).toEqual(['noHighRise']);
+    expect(warns.filter((m) => /Frontage 9\.0 m is under 12 m/i.test(m.text))).toHaveLength(1);
+    expect(warns.some((m) => /setbacks leave/i.test(m.text))).toBe(false);
+  });
+  it('the map still has the setbacks and an envelope to draw', () => {
+    expect(r.footprints!.lowRise.area).toBeGreaterThan(0);
+    expect(r.site!.netArea).toBeCloseTo(180, 6);
+  });
+});
+
+describe('cards only for layouts with floors', () => {
+  it('every shown card has a building on every fixture', () => {
+    for (const r of [...Object.values(FIXTURES), onRoad(9, 20, 10)]) {
+      for (const c of r.concepts) expect(c.concept.ok && c.concept.floors.length > 0).toBe(true);
+      expect(r.noFit === null).toBe(r.concepts.length > 0);
+    }
+  });
+});

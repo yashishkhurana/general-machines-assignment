@@ -415,6 +415,9 @@ export function AlsoConsidered({ results }: { results: Results }) {
 
 export function Verdict({ results, which }: { results: Results; which: 'A' | 'B' }) {
   const err = results.messages.find((m) => m.level === 'error');
+  if (!err && results.noFit) {
+    return (<div className="verdict"><h1>No condo fits this plot.</h1><p>{results.noFit.reason}</p>{results.noFit.suggestion && <p className="muted">{results.noFit.suggestion}</p>}</div>);
+  }
   if (err || !results.far || !results.concepts.length) {
     const unsupported = results.zone && ['unsupported', 'none'].includes(results.zone.status);
     return (<div className="verdict"><h1>{unsupported ? 'Zone not supported' : 'No result yet'}</h1><p>{err?.text ?? 'Draw a plot and pick its road edge.'}</p></div>);
