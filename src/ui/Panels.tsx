@@ -515,7 +515,7 @@ export function Credits({ satellite }: { satellite: boolean }) {
 
 export function ToolHint({ tool, measure }: { tool: Tool; measure: number | null }) {
   const t: Partial<Record<Tool, string>> = {
-    draw: 'Click each corner of the plot. Click the first corner to close it.',
+    draw: 'Click to add corners. Double-click, press Enter or click the first corner to finish. Esc cancels.',
     pickRoad: 'Click the plot edge that faces the road.',
     measure: measure !== null ? `${n1(measure)} m. Click again to measure another line.` : 'Click one edge of the road, then the other.',
   };

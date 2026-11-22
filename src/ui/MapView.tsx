@@ -172,7 +172,7 @@ export function MapView(p: MapProps) {
           // map drag, which silently drops the click, so allow some slack before a press counts as a drag
           adapter: new TerraDrawMapLibreGLAdapter({ map, minPixelDragDistance: 8, minPixelDragDistanceDrawing: 8, minPixelDragDistanceSelecting: 4 } as any),
           modes: [
-            new TerraDrawPolygonMode({ styles: { fillColor: '#2f6fdf', fillOpacity: 0.15, outlineColor: '#2f6fdf', outlineWidth: 2 } } as any),
+            new TerraDrawPolygonMode({ pointerDistance: 10, styles: { fillColor: '#2f6fdf', fillOpacity: 0.15, outlineColor: '#2f6fdf', outlineWidth: 2 } } as any),
             new TerraDrawSelectMode({
               flags: { polygon: { feature: { draggable: true, coordinates: { midpoints: true, draggable: true, deletable: true } } } },
               styles: { selectedPolygonColor: '#2f6fdf', selectedPolygonFillOpacity: 0.06, selectedPolygonOutlineColor: '#1d1f22', selectedPolygonOutlineWidth: 2, selectionPointColor: '#1d1f22', selectionPointWidth: 5, midPointColor: '#2f6fdf', midPointWidth: 3 },
