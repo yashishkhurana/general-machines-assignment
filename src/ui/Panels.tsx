@@ -44,7 +44,7 @@ function Num(p: { label: string; value: number; onChange: (v: number) => void; u
   );
 }
 
-type Slot = 'plot' | 'zone' | 'road' | 'current' | 'planned' | null;
+type Slot = 'type' | 'plot' | 'zone' | 'road' | 'current' | 'planned' | null;
 
 function Val({ id, open, setOpen, children, label }: { id: Exclude<Slot, null>; open: Slot; setOpen: (s: Slot) => void; children: ReactNode; label: string }) {
   return (
@@ -76,13 +76,15 @@ export function Setup(p: SetupProps) {
   const aps = parkingAreaPerSpace(s);
   const widened = r0 && Math.abs(r0.width - r0.current) > 1e-9;
 
+  const typeVal = <Val id="type" open={open} setOpen={setOpen} label="Building type: change">condo</Val>;
+
   return (
     <div className="setup">
       {state.ring.length < 3 ? (
-        <p className="sentence">Draw a plot on the map to start.</p>
+        <p className="sentence">A {typeVal}. Draw a plot on the map to start.</p>
       ) : (
         <p className="sentence">
-          A condo on a <Val id="plot" open={open} setOpen={setOpen} label="Plot area: change the plot">{site ? `${n0(site.netArea)} m²` : '—'}</Val> plot in zone{' '}
+          A {typeVal} on a <Val id="plot" open={open} setOpen={setOpen} label="Plot area: change the plot">{site ? `${n0(site.netArea)} m²` : '—'}</Val> plot in zone{' '}
           <Val id="zone" open={open} setOpen={setOpen} label="Zone: change">{zoneShown}</Val>
           {r0 ? (
             <>, facing <Val id="road" open={open} setOpen={setOpen} label="Road: change the road edge">{roadName ?? `edge ${r0.edge + 1}`}</Val>
@@ -95,6 +97,18 @@ export function Setup(p: SetupProps) {
         </p>
       )}
 
+      {open === 'type' && (
+        <div className="editor">
+          <fieldset className="types">
+            <legend>Building type</legend>
+            <label className="check"><input type="radio" name="btype" value="condo" checked readOnly /> Condominium</label>
+            <label className="check off"><input type="radio" name="btype" value="office" disabled aria-describedby="btype-office" /> Office</label>
+            <small id="btype-office">Not modelled: ย.10 cl. 17 limits offices over 10,000 m² by location, and Reg. 7 sets a different parking rate.</small>
+            <label className="check off"><input type="radio" name="btype" value="hotel" disabled aria-describedby="btype-hotel" /> Hotel</label>
+            <small id="btype-hotel">Not modelled: ย.10 cl. 17 limits hotels over 80 rooms by location, the Hotel Act adds its own rules, and the cl. 53/54 bonuses may apply.</small>
+          </fieldset>
+        </div>
+      )}
       {open === 'plot' && (
         <div className="editor">
           <p>Drag the corners on the map to change the plot, or draw a new one.</p>

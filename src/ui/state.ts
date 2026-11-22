@@ -15,7 +15,12 @@ export interface ViewState {
   zones: boolean;
   rays: boolean;
 }
+/** Only condominiums are modelled; office and hotel are shown as not modelled (decisions.md T14). */
+export const BUILDING_TYPES = ['condo', 'office', 'hotel'] as const;
+export type BuildingType = 'condo';
+export const isBuildingType = (t: unknown): t is BuildingType => t === 'condo';
 export interface AppState {
+  buildingType: BuildingType;
   ring: LL[];
   roads: RoadEdgeInput[];
   zoneOverride: Zone | null;
@@ -28,6 +33,7 @@ export const DEFAULT_VIEW: ViewState = { satellite: false, envelope: 'highRise',
 export function exampleState(): AppState {
   const ex = soi39Example();
   return {
+    buildingType: 'condo',
     ring: ex.ring,
     roads: [{ edge: ex.roadEdge, width: ex.planned, current: ex.current }],
     zoneOverride: null,
@@ -43,6 +49,7 @@ const r2 = (x: number) => Math.round(x * 100) / 100;
 export function encodeState(s: AppState): string {
   const st = s.settings;
   const o = {
+    y: s.buildingType,
     p: s.ring.flatMap(([x, y]) => [r7(x), r7(y)]),
     e: s.roads.map((r) => [r.edge, r2(r.width), r2(r.current)]),
     z: s.zoneOverride ?? '',
@@ -93,6 +100,7 @@ export function decodeState(hash: string): AppState | null {
     const env = ['highRise', 'lowRise', 'none'].includes(v[1]) ? v[1] : DEFAULT_VIEW.envelope;
     const con = ['A', 'B', 'none'].includes(v[2]) ? v[2] : DEFAULT_VIEW.concept;
     return {
+      buildingType: isBuildingType(o.y) ? o.y : 'condo',
       ring,
       roads: (o.e ?? []).map((e: unknown[]) => ({ edge: num(e[0], -1), width: num(e[1], NaN), current: num(e[2], NaN) })),
       zoneOverride: isSupportedZone(o.z) ? o.z : null,
@@ -143,7 +151,7 @@ export function remapRoads(oldRing: LL[], newRing: LL[], roads: RoadEdgeInput[])
 export function isExample(s: AppState): boolean {
   const ex = exampleState();
   const sameRing = s.ring.length === ex.ring.length && s.ring.every((p, i) => Math.abs(p[0] - ex.ring[i][0]) < 1e-9 && Math.abs(p[1] - ex.ring[i][1]) < 1e-9);
-  return sameRing && canon(s.roads) === canon(ex.roads) && s.zoneOverride === ex.zoneOverride && canon(s.settings) === canon(ex.settings);
+  return sameRing && s.buildingType === ex.buildingType && canon(s.roads) === canon(ex.roads) && s.zoneOverride === ex.zoneOverride && canon(s.settings) === canon(ex.settings);
 }
 
 /** JSON with sorted keys, so two equal objects compare equal whatever order their keys were set in. */

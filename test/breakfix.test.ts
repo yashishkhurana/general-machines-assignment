@@ -207,3 +207,20 @@ describe('a refused value says which value is still in use', () => {
     expect(refusedText('Not a number.', 25, '%')).toBe('Not a number. Still using 25%.');
   });
 });
+
+describe('building type in the share link', () => {
+  const withY = (y: unknown) => {
+    const o = JSON.parse(decodeURIComponent(encodeState(exampleState()).slice(2)));
+    if (y === undefined) delete o.y; else o.y = y;
+    return readLink('#c=' + encodeURIComponent(JSON.stringify(o)));
+  };
+  it('defaults to condo, round-trips it, and replaces unknown values with condo (like zones)', () => {
+    expect(exampleState().buildingType).toBe('condo');
+    expect(encodeState(exampleState())).toContain(encodeURIComponent('"y":"condo"'));
+    for (const y of [undefined, 'condo', 'office', 'hotel', 'castle', 3]) {
+      const r = withY(y);
+      expect(r.status).toBe('ok');
+      if (r.status === 'ok') expect(r.state.buildingType).toBe('condo');
+    }
+  });
+});
