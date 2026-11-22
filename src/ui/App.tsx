@@ -32,6 +32,9 @@ export function App() {
   ringRef.current = state.ring;
   const stateRef = useRef(state);
   stateRef.current = state;
+  // the layout selected before the last change (A and B are relabelled by rank); cleared when a link or reset
+  // replaces the case, so the link's own choice stands
+  const lastSel = useRef<{ results: unknown; key: string | null } | null>(null);
 
   const { input, frame } = useMemo(() => toSiteInput(state), [state.ring, state.roads, state.zoneOverride, state.settings]);
   const results = useMemo(() => compute(input), [input]);
@@ -61,6 +64,7 @@ export function App() {
   useEffect(() => {
     const onHash = () => {
       const link = readLink(location.hash);
+      lastSel.current = null;
       if (link.status === 'ok') { setState(link.state); setBadLink(false); setMeasure([]); setFitKey(String(Date.now())); }
       else if (link.status === 'invalid') { setState(exampleState()); setBadLink(true); setFitKey(String(Date.now())); }
     };
@@ -113,7 +117,7 @@ export function App() {
   const setZone = (zoneOverride: Zone | null) => setState((s) => ({ ...s, zoneOverride }));
   const setView = (v: Partial<ViewState>) => setState((s) => ({ ...s, view: { ...s.view, ...v } }));
   // resets the plot, road, zone and every setting (keeps nothing from the edited case)
-  const reset = () => { setState(exampleState()); setBadLink(false); setMeasure([]); setTool('edit'); setRules(null); setFitKey(String(Date.now())); };
+  const reset = () => { lastSel.current = null; setState(exampleState()); setBadLink(false); setMeasure([]); setTool('edit'); setRules(null); setFitKey(String(Date.now())); };
   const copy = async () => {
     const url = location.origin + location.pathname + '#' + encodeState(state);
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch { history.replaceState(null, '', url); }
@@ -125,7 +129,6 @@ export function App() {
 
   const sel = results.concepts.find((c) => c.concept.id === which) ?? results.concepts[0];
   // the ranking can swap A and B when the plot or a setting changes: keep the same layout selected if still shown
-  const lastSel = useRef<{ results: typeof results; key: string | null } | null>(null);
   useEffect(() => {
     const prev = lastSel.current;
     if (prev && prev.results !== results && prev.key) {
