@@ -71,7 +71,8 @@ export function rankCandidates(cands: Candidate[]): Candidate[] {
 const n1 = (x: number) => x.toLocaleString('en-US', { maximumFractionDigits: 1 });
 function fitNote(key: ConceptKey, avail: Availability): string {
   if (key === 'towerPodium' || key === 'towerBasement') {
-    const access = `${fmtVs(avail.accessFrontage, rule('access.frontage'))} m frontage on a ${fmtVs(avail.accessRoadCurrent, rule('access.road'))} m road allows a high-rise`;
+    const w = fmtVs(avail.accessRoadCurrent, rule('access.road'));
+    const access = `${fmtVs(avail.accessFrontage, rule('access.frontage'))} m frontage on ${/^(8|11|18)(\D|$)|^8/.test(w) ? 'an' : 'a'} ${w} m road allows a high-rise`;
     return key === 'towerPodium' ? `${access}; parking floors in the podium avoid digging basements.` : `${access}; basement parking leaves every floor above ground for flats.`;
   }
   const park = key === 'lowBasement' ? 'basement parking leaves every floor above ground for flats' : 'parking floors avoid digging basements';
