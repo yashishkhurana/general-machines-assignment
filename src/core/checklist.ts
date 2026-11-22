@@ -71,9 +71,14 @@ export function checklist(c: Concept, site: Site, avail: Availability, s: Settin
     push({ id: 'xlMargin', label: 'Margin under the extra-large line (10,000 m²) and the high-rise line (23 m)', status: fragile ? 'warn' : 'pass', required: `≥ ${n0(rule('class.extralarge.margin') * rule('class.extralarge.area'))} m² to be robust`, provided: `${n0(m.area)} m² (${(100 * m.area / rule('class.extralarge.area')).toFixed(2)}%), ${n1(m.height)} m${fragile ? ': fragile, a survey difference of a fraction of a percent tips it over' : ''}`, clause: 'Reg. 33 cl. 1', rules: ['class.extralarge.area', 'class.extralarge.margin'] });
     const sb = c.footprint.setbacks;
     const front = sb.filter((x) => x.road).map((x) => x.setback);
-    const side = sb.filter((x) => !x.road).map((x) => x.setback);
+    const blank = c.kind === 'low-rise blank';
+    const side = sb.filter((x) => !x.road && !(blank && x.side)).map((x) => x.setback);
     push({ id: 'front', label: 'Front building line from the planned road boundary', status: 'pass', required: front.length ? `${n1(Math.max(...front))} m (max of cl. 50 and cl. 55)` : '—', provided: 'footprint cut to it', clause: 'Reg. 55 cl. 41; Ordinance cl. 50, 55', rules: ['front.tier2.factor', 'clear.high'] });
-    push({ id: 'side', label: 'Walls with openings from side and rear boundaries (openings assumed on every side)', status: 'pass', required: side.length ? `${n1(Math.max(...side))} m` : '—', provided: 'footprint cut to it', clause: 'Ordinance cl. 54; Reg. 55 cl. 50', rules: ['side.low', 'side.high'] });
+    if (blank) {
+      const sides = sb.filter((x) => x.side);
+      push({ id: 'blankSides', label: 'Side walls without windows (Reg. 55 cl. 50); 1 m clear kept (Ordinance cl. 55)', status: 'warn', required: 'no windows or other openings in the side walls; clear space to the side boundaries', provided: sides.length ? `${n1(Math.min(...sides.map((x) => x.setback)))} m kept clear on ${sides.length} side edge${sides.length > 1 ? 's' : ''}; a design condition, not checked` : 'no side edges found', clause: 'Reg. 55 cl. 50; Ordinance cl. 55', rules: ['clear.low', 'clear.height', 'side.low', 'side.high'] });
+    }
+    push({ id: 'side', label: blank ? 'Walls with openings (road and rear faces) from the rear boundary' : 'Walls with openings from side and rear boundaries (openings assumed on every side)', status: 'pass', required: side.length ? `${n1(Math.max(...side))} m` : '—', provided: 'footprint cut to it', clause: 'Ordinance cl. 54; Reg. 55 cl. 50', rules: ['side.low', 'side.high'] });
   }
 
   push({ id: 'plane', label: 'Every floor plus parapet under the height plane', status: 'pass', required: '≤ 2 × distance to the far road boundary', provided: `plates clipped to the plane (parapet ${rule('a.parapet')} m)`, clause: 'Reg. 55 cl. 44; Ordinance cl. 49', rules: ['height.plane', 'a.parapet'] });

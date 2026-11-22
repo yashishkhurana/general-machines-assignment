@@ -302,8 +302,12 @@ export function MapView(p: MapProps) {
     // with no layout shown (nothing fits), show the envelope of the class the plot can have
     const envKind: 'highRise' | 'lowRise' | 'none' = v.envelope === 'none' ? 'none' : sel ? (isTower(sel) ? 'highRise' : 'lowRise')
       : r.avail?.highRise && (fps?.highRise.area ?? 0) > 0 ? 'highRise' : 'lowRise';
+    // nothing fits: draw the most generous footprint (one storey, blank side walls) and its envelope
+    // the blank-wall block has its own footprint (1 m at the sides)
+    const blank = sel?.kind === 'low-rise blank';
+    const lowFp = blank ? sel!.footprint : !sel && r.noFit ? r.noFit.footprint : fps?.lowRise;
     set('fpHigh', fc(fps && envKind === 'highRise' ? mpToLL(frame, fps.highRise.mp) : []));
-    set('fpLow', fc(fps && envKind === 'lowRise' ? mpToLL(frame, fps.lowRise.mp) : []));
+    set('fpLow', fc(lowFp && envKind === 'lowRise' ? mpToLL(frame, lowFp.mp) : []));
     const concept = r.concepts.find((c) => c.concept.id === v.concept)?.concept;
     set('fire', fc(concept?.openSpace.fireRing ? mpToLL(frame, concept.openSpace.fireRing) : []));
     const floors: any[] = [];
@@ -331,7 +335,7 @@ export function MapView(p: MapProps) {
       };
       const road = site?.roads[0];
       put('road', road ? frame.toLL([(road.a[0] + road.b[0]) / 2, (road.a[1] + road.b[1]) / 2]) : null, small || !props.current.roadName ? 'Road edge' : `Road edge, ${props.current.roadName}`);
-      const fpShown = envKind !== 'lowRise' ? fps?.highRise : fps?.lowRise;
+      const fpShown = envKind !== 'lowRise' ? fps?.highRise : lowFp;
       const h = r.plane ? (envKind !== 'lowRise' ? r.plane.atHighRiseFront : r.plane.atLowRiseFront) : null;
       let front: LL | null = null;
       if (site && fpShown && fpShown.area > 0 && road) {
@@ -340,7 +344,7 @@ export function MapView(p: MapProps) {
         if (pp.length >= 2) front = frame.toLL([(pp[0].q[0] + pp[1].q[0]) / 2, (pp[0].q[1] + pp[1].q[1]) / 2]);
       }
       const hr = envKind !== 'lowRise';
-      put('height', front && h ? front : null, h ? (hr ? (small ? `Height limit ${h.toFixed(1)} m` : `Height limit at the front line: ${h.toFixed(1)} m`) : 'Low-rise: under 23 m') : '');
+      put('height', front && h ? front : null, h ? (hr ? (small ? `Height limit ${h.toFixed(1)} m` : `Height limit at the front line: ${h.toFixed(1)} m`) : (blank ? 'Low-rise: at most 15 m' : 'Low-rise: under 23 m')) : '');
       let clearAt: LL | null = null, clearText = '';
       if (site && fpShown && site.ring.length >= 3) {
         const side = fpShown.setbacks.find((x) => !x.road);
@@ -360,7 +364,7 @@ export function MapView(p: MapProps) {
     if (env) {
       if (!site || !fps || envKind === 'none') env.set(null, []);
       else if (envKind === 'highRise') env.set(frame, fps.highRise.area > 0 ? [{ mesh: envelopeMesh(site, fps.highRise.mp), color: COLORS.envHigh, opacity: 0.1 }] : []);
-      else env.set(frame, fps.lowRise.area > 0 ? [{ mesh: envelopeMesh(site, fps.lowRise.mp, 23), color: COLORS.envLow, opacity: 0.12 }] : []);
+      else env.set(frame, lowFp && lowFp.area > 0 ? [{ mesh: envelopeMesh(site, lowFp.mp, blank ? 15 : 23), color: COLORS.envLow, opacity: 0.12 }] : []);
     }
   }
 

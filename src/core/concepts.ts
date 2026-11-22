@@ -4,7 +4,7 @@
 import { clean, intersection, mpArea, mpBounds, mpPerimeter, offsetRight, stripsUnion, union, difference, segmentBuffer, type MultiPoly, type Pt } from './geom';
 import { classify, type Availability, type BuildingClass } from './classify';
 import { underPlane } from './envelope';
-import { highRiseFootprint, lowRiseFootprint, type Footprint } from './footprint';
+import { highRiseFootprint, lowRiseBlankFootprint, lowRiseFootprint, sideEdges, type Footprint } from './footprint';
 import { openSpaceRequired, parkingAreaPerSpace, parkingNeed, type OpenSpaceReq, type ParkingNeed } from './metrics';
 import { rule } from './rules';
 import { FAR_EXTENSION } from './site';
@@ -23,12 +23,12 @@ export interface Floor {
 }
 
 /** Candidate identity; stable across rankings (the shown cards are relabelled A and B by rank). */
-export type ConceptKey = 'towerPodium' | 'towerBasement' | 'lowBasement' | 'lowPodium';
+export type ConceptKey = 'towerPodium' | 'towerBasement' | 'lowBasement' | 'lowPodium' | 'lowBlank';
 export interface Concept {
   id: 'A' | 'B';
   key: ConceptKey;
   title: string;
-  kind: 'tower' | 'tower basement' | 'low-rise basement' | 'low-rise podium';
+  kind: 'tower' | 'tower basement' | 'low-rise basement' | 'low-rise podium' | 'low-rise blank';
   ok: boolean; // produced a building
   reason: string | null; // why not, if !ok
   floors: Floor[];
@@ -241,7 +241,10 @@ export function lowRisePlateLimit(netArea: number, footprintArea: number): numbe
   return Math.min(footprintArea, netArea * (1 - rule('os.ord52')), netArea / (1 + rule('os.reg55')));
 }
 
-export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: number, mode: 'basement' | 'podium', id: 'A' | 'B' = 'B'): Concept {
+/** `blank`: windowless side walls (sides keep only the cl. 55 clear space) and a roof deck of at most 15 m. */
+export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: number, mode: 'basement' | 'podium', id: 'A' | 'B' = 'B', blank = false): Concept {
+  const sides = blank ? sideEdges(site) : null;
+  const fpFor = (N: number, h: number) => (sides ? lowRiseBlankFootprint(site, N, h, sides) : lowRiseFootprint(site, N, h));
   const aps = parkingAreaPerSpace(s);
   const hrLimit = rule('class.highrise.height');
   const xl = rule('class.extralarge.area');
@@ -257,9 +260,10 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
   for (let N = 1; N <= 12; N++) {
     const roofDeck = floorTops(s, N - 1).z1;
     if (roofDeck >= hrLimit) break;
+    if (blank && roofDeck > rule('clear.height')) break; // cl. 55's 1 m clear space holds up to 15 m
     const fp = (() => {
       const k = `${N > rule('side.storeys') || roofDeck > rule('side.height')}|${roofDeck > rule('clear.height')}|${N > rule('front.tier.storeys') || roofDeck > rule('front.tier.height')}`;
-      if (!fpCache.has(k)) fpCache.set(k, lowRiseFootprint(site, N, roofDeck));
+      if (!fpCache.has(k)) fpCache.set(k, fpFor(N, roofDeck));
       return fpCache.get(k)!;
     })();
     lastFp = fp;
@@ -334,21 +338,22 @@ export function conceptLowRise(site: Site, s: Settings, permitted: number, osr: 
     if (heightStop) break;
   }
 
-  const title = mode === 'basement' ? 'Low-rise block, basement parking' : 'Low-rise block, parking floors';
-  const kind = mode === 'basement' ? 'low-rise basement' : 'low-rise podium';
-  const key: ConceptKey = mode === 'basement' ? 'lowBasement' : 'lowPodium';
+  const title = blank ? 'Low-rise block, blank side walls' : mode === 'basement' ? 'Low-rise block, basement parking' : 'Low-rise block, parking floors';
+  const kind: Concept['kind'] = blank ? 'low-rise blank' : mode === 'basement' ? 'low-rise basement' : 'low-rise podium';
+  const key: ConceptKey = blank ? 'lowBlank' : mode === 'basement' ? 'lowBasement' : 'lowPodium';
   const pick = best ?? bestAny;
   if (!pick) {
     const why = lastFp && lastFp.area < rule('a.minPlate')
       ? `Low-rise setbacks leave ${fmt(lastFp.area)} m², under the ${rule('a.minPlate')} m² smallest usable plate.`
       : heightStop ? 'The height plane leaves no usable floor.' : 'No low-rise layout fits.';
-    return emptyConcept(id, key, title, kind, lastFp ?? lowRiseFootprint(site, 1, s.groundFloor), why, s, site, osr);
+    return emptyConcept(id, key, title, kind, lastFp ?? fpFor(1, s.groundFloor), why, s, site, osr);
   }
   if (!best) notes.push(`No layout provides enough parking. Shown: the largest layout, which needs ${pick.need.needed} spaces and has ${pick.spaces}.`);
   // what shaped the chosen layout
   const nextRoof = floorTops(s, pick.N).z1;
   let binding: string;
   if (!best) binding = 'parking';
+  else if (blank && nextRoof > rule('clear.height')) binding = `roof deck at most 15 m for blank side walls (no room for floor ${pick.N + 1}); plate set by ${pick.binding}`;
   else if (nextRoof >= hrLimit) binding = `roof deck under 23 m (no room for floor ${pick.N + 1}); plate set by ${pick.binding}`;
   else if (heightStop) binding = `height plane; plate set by ${pick.binding}`;
   else binding = `plate set by ${pick.binding}`;

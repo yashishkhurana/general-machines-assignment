@@ -222,7 +222,8 @@ function verdict(c: Concept, permitted: number): { title: string; why: string } 
   }
   const title = `A ${c.storeys}-storey block fits here${c.basements ? `, over ${c.basements} basement${c.basements > 1 ? 's' : ''}` : ''}`;
   const parts: string[] = [];
-  if (/roof deck under 23 m/.test(b)) parts.push(`It stops at ${c.storeys} floors to stay under 23 m, the line for a high-rise.`);
+  if (/roof deck at most 15 m/.test(b)) parts.push(`It stops at ${c.storeys} floors to keep the roof deck at or under 15 m, so 1 m of clear space is enough beside the windowless side walls.`);
+  else if (/roof deck under 23 m/.test(b)) parts.push(`It stops at ${c.storeys} floors to stay under 23 m, the line for a high-rise.`);
   else if (/height plane/.test(b)) parts.push('The height limit from the road stops it going higher.');
   if (/under 10,000/.test(b)) parts.push('The floor plate is sized to keep the total under 10,000 m², basements included, so it stays a low-rise building.');
   else if (/parking/.test(b)) parts.push('The floor plate is sized so the basements can hold the parking it needs.');
@@ -273,6 +274,9 @@ export function Limits({ c, results }: { c: Concept; results: Results }) {
       {tower ? (
         <Bar label="Height" value={`${n1(c.roofDeck)} m to the roof`} frac={top ? c.roofDeck / top.max : 0} tone="env"
           note={<>The limit is {n1(results.plane!.atHighRiseFront)} m at the front line and rises 2 m for every metre back{step ? `, so floors step back from floor ${step}` : ''}.{alt}</>} />
+      ) : c.kind === 'low-rise blank' ? (
+        <Bar label="Height" value={`${n1(c.roofDeck)} of 15 m`} frac={c.roofDeck / rule('clear.height')} tone="env"
+          note={<>Blank side walls need only 1 m clear while the roof deck stays at or under 15 m: {n1(rule('clear.height') - c.roofDeck)} m to spare.</>} />
       ) : (
         <Bar label="Height" value={`${n1(c.roofDeck)} of 23 m`} frac={c.roofDeck / rule('class.highrise.height')} tone="env"
           note={<>Under 23 m to the roof keeps it a low-rise building: {n1(m.height)} m to spare.</>} />
@@ -294,7 +298,10 @@ const PLAIN: Record<string, (k: CheckItem) => { title: string; detail: string }>
   lowrise: (k) => ({ title: k.status === 'pass' ? 'Stays a low-rise building' : 'Would no longer be low-rise', detail: `${k.provided}: under 23 m to the roof and under 10,000 m² in total.` }),
   xlMargin: (k) => ({ title: k.status === 'pass' ? 'Comfortably under the low-rise limits' : 'Very close to the 10,000 m² line', detail: k.provided.replace(': fragile, a survey difference of a fraction of a percent tips it over', '. A small survey difference would make it extra-large.') }),
   front: (k) => ({ title: 'Set back from the road', detail: `${k.required.replace(' (max of cl. 50 and cl. 55)', '')} from the planned road line.` }),
-  side: (k) => ({ title: 'Set back from the neighbours', detail: `${k.required} from the side and rear boundaries, assuming windows on every side.` }),
+  side: (k) => (k.label.startsWith('Walls with openings (road and rear')
+    ? { title: 'Set back from the rear neighbour', detail: `${k.required} from the rear boundary, where the windows are.` }
+    : { title: 'Set back from the neighbours', detail: `${k.required} from the side and rear boundaries, assuming windows on every side.` }),
+  blankSides: (k) => ({ title: 'Side walls without windows', detail: `A design condition: windows only on the road and rear faces. ${k.provided.replace('; a design condition, not checked', '')} (1 m is enough up to a 15 m roof deck).` }),
   plane: () => ({ title: 'Fits under the height limit', detail: 'Every floor and its parapet stay under the sloped limit from the road.' }),
   roofPlant: (k) => ({ title: k.status === 'pass' ? 'Room for the lift overrun on the roof' : 'No room for the lift overrun on the roof', detail: k.status === 'pass' ? 'A 4 m lift and stair head fits under the height limit.' : 'Move the plant back or drop a floor.' }),
   plantedB: (k) => ({ title: k.status === 'pass' ? 'Enough planted ground' : 'Not enough planted ground', detail: `${k.required} needed, ${k.provided.replace(' available', '')} available.` }),

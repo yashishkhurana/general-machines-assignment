@@ -5,7 +5,7 @@ import { conceptLowRise, conceptTower, type Concept, type ConceptKey } from './c
 import { fmtVs } from './format';
 import { rule } from './rules';
 import { planeHeightAltAt, planeRange } from './envelope';
-import { highRiseFootprint, lowRiseFootprint, type Footprint } from './footprint';
+import { highRiseFootprint, lowRiseBlankFootprint, lowRiseFootprint, sideEdges, type Footprint } from './footprint';
 import { floorArea, resolveZone, type FloorAreaResult, type ZoneResult } from './metrics';
 import { buildSite } from './site';
 import type { Message, SiteInput, Site } from './types';
@@ -41,13 +41,15 @@ export interface Results {
   /** Set when no candidate builds anything: the binding reason and a rough "what would work". */
   noFit: NoFit | null;
 }
-export interface NoFit { reason: string; suggestion: string | null }
+/** `footprint`: the most generous one (one storey, blank side walls), drawn on the map. */
+export interface NoFit { reason: string; suggestion: string | null; footprint: Footprint }
 
 const TITLES: Record<ConceptKey, string> = {
   towerPodium: 'Tower on a parking podium', towerBasement: 'Tower, basement parking',
   lowBasement: 'Low-rise block, basement parking', lowPodium: 'Low-rise block, parking floors',
+  lowBlank: 'Low-rise block, blank side walls',
 };
-const ORDER: ConceptKey[] = ['towerPodium', 'towerBasement', 'lowBasement', 'lowPodium'];
+const ORDER: ConceptKey[] = ['towerPodium', 'towerBasement', 'lowBasement', 'lowPodium', 'lowBlank'];
 
 /** Ranking: candidates that pass every checklist line first, by residential floor area, then by planted ground
  *  available; then the ones that fail (a building before none, fewer failed lines, more residential area);
@@ -75,20 +77,21 @@ export function rankCandidates(cands: Candidate[]): Candidate[] {
 function noFitState(site: Site, s: SiteInput['settings'], avail: Availability, cands: Candidate[]): NoFit {
   const minPlate = rule('a.minPlate');
   const n0 = (x: number) => x.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  // the most generous footprint: a one-storey low-rise block
-  const fp1 = lowRiseFootprint(site, 1, s.groundFloor);
+  // the most generous footprint: a one-storey low-rise block with blank side walls
+  const fp1 = lowRiseBlankFootprint(site, 1, s.groundFloor, sideEdges(site));
   const road = site.roads[0];
   if (fp1.area >= minPlate || !road) {
-    const low = cands.find((c) => c.key === 'lowBasement')?.concept?.reason;
+    const low = (cands.find((c) => c.key === 'lowBlank') ?? cands.find((c) => c.key === 'lowBasement'))?.concept?.reason;
     const r = low && /height plane/.test(low) ? `The height limit from the road leaves no floor of ${minPlate} m² or more; the smallest usable floor is ${minPlate} m² (assumed).` : (low ?? cands.find((c) => c.concept?.reason)?.concept?.reason ?? 'No layout fits.');
-    return { reason: r, suggestion: null };
+    return { reason: r, suggestion: null, footprint: fp1 };
   }
   const reason = `Setbacks leave ${n0(fp1.area)} m² to build on; the smallest usable floor is ${minPlate} m² (assumed).`;
   // treat the plot as a rectangle: the road frontage by (net area / frontage) deep, with the same setbacks
   const W = road.frontage, D = site.netArea / W;
   const front = Math.max(...fp1.setbacks.filter((x) => x.road).map((x) => x.setback));
-  const other = Math.max(0, ...fp1.setbacks.filter((x) => !x.road).map((x) => x.setback));
-  const w0 = W - 2 * other, d0 = D - front - other;
+  const side = Math.max(0, ...fp1.setbacks.filter((x) => !x.road && x.side).map((x) => x.setback));
+  const rear = Math.max(0, ...fp1.setbacks.filter((x) => !x.road && !x.side).map((x) => x.setback));
+  const w0 = W - 2 * side, d0 = D - front - rear;
   const up = (x: number) => Math.ceil(x * 10) / 10;
   const opts: string[] = [];
   if (d0 > 0) { const dW = up(minPlate / d0 - Math.max(0, w0)); opts.push(`about ${n1(dW)} m more frontage (${n1(W + dW)} m)`); }
@@ -99,7 +102,7 @@ function noFitState(site: Site, s: SiteInput['settings'], avail: Availability, c
   if (!avail.highRise && W < rule('access.frontage')) {
     suggestion += ` A frontage of ${rule('access.frontage')} m or more also allows a high-rise${road.current < rule('access.road') ? `, if the road is also at least ${rule('access.road')} m wide` : ''}.`;
   }
-  return { reason, suggestion };
+  return { reason, suggestion, footprint: fp1 };
 }
 
 const n1 = (x: number) => x.toLocaleString('en-US', { maximumFractionDigits: 1 });
@@ -109,7 +112,8 @@ function fitNote(key: ConceptKey, avail: Availability): string {
     const access = `${fmtVs(avail.accessFrontage, rule('access.frontage'))} m frontage on ${/^(8|11|18)(\D|$)|^8/.test(w) ? 'an' : 'a'} ${w} m road allows a high-rise`;
     return key === 'towerPodium' ? `${access}; parking floors in the podium avoid digging basements.` : `${access}; basement parking leaves every floor above ground for flats.`;
   }
-  const park = key === 'lowBasement' ? 'basement parking leaves every floor above ground for flats' : 'parking floors avoid digging basements';
+  const park = key === 'lowBlank' ? 'windows on the road and rear faces only, so the side walls need just 1 m clear (roof deck at most 15 m)'
+    : key === 'lowBasement' ? 'basement parking leaves every floor above ground for flats' : 'parking floors avoid digging basements';
   if (!avail.highRise) {
     const why = (avail.reasons[0] ?? '').replace(/\s*\(Reg\. 33 cl\. 2[^)]*\)\.?$/, '').replace(/\.$/, '');
     return `No high-rise here (${why.replace(/^\w/, (x) => x.toLowerCase())}); ${park}.`;
@@ -170,6 +174,15 @@ export function compute(input: SiteInput): Results {
     }
     add('lowBasement', () => conceptLowRise(site, s, far.permitted, far.osrWeighted, 'basement'), 'low');
     add('lowPodium', () => conceptLowRise(site, s, far.permitted, far.osrWeighted, 'podium'), 'low');
+    // blank side walls: basements (under the block, so off the planted ground) when they hold the parking,
+    // otherwise parking floors
+    add('lowBlank', () => {
+      const parks = (c: Concept) => c.ok && c.parking.provided >= c.parking.needed;
+      const b = conceptLowRise(site, s, far.permitted, far.osrWeighted, 'basement', 'B', true);
+      if (parks(b)) return b;
+      const p = conceptLowRise(site, s, far.permitted, far.osrWeighted, 'podium', 'B', true);
+      return parks(p) || (p.ok && !b.ok) ? p : b;
+    }, 'low');
 
     const candidates = rankCandidates(cands);
     // only layouts with floors get a card; the rest (with their reasons) go under Also considered

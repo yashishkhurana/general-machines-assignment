@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { compute, type Results } from '../src/core/compute';
 import { isTower } from '../src/core/concepts';
+import { buildSite } from '../src/core/site';
+import { sideEdges } from '../src/core/footprint';
 import { difference, intersection, mpArea, union } from '../src/core/geom';
 import { DEFAULT_SETTINGS, type ZonePoly } from '../src/core/types';
 import { soi39Example } from '../src/geo/example';
@@ -19,6 +21,7 @@ const FIXTURES: Record<string, Results> = {
   'small plot, 24 × 25 m (600 m²) on a 12 m road': onRoad(24, 25, 12),
   'narrow plot, 11 m frontage × 40 m on a 12 m road': onRoad(11, 40, 12),
   'large plot, 80 × 80 m (6,400 m²) on a 20 m road': onRoad(80, 80, 20),
+  'narrow plot, 9 × 20 m on a 10 m road': onRoad(9, 20, 10),
 };
 
 describe('different plots give different winners', () => {
@@ -27,13 +30,13 @@ describe('different plots give different winners', () => {
     expect(shown(r)).toEqual(['A:towerBasement', 'B:towerPodium']);
     expect(r.concepts.every((c) => c.passes)).toBe(true);
     expect(r.concepts[0].concept.residential).toBeGreaterThan(r.concepts[1].concept.residential);
-    expect(r.considered.map((c) => c.key)).toEqual(['lowBasement', 'lowPodium']);
+    expect(r.considered.map((c) => c.key)).toEqual(['lowBasement', 'lowPodium', 'lowBlank']);
     expect(r.concepts[0].fit).toMatch(/allows a high-rise; basement parking/);
   });
-  it('small plot: the 6 m tower setbacks cost too much, so low-rise wins', () => {
+  it('small plot: the 6 m tower setbacks cost too much, so low-rise wins (B: blank side walls, since T18)', () => {
     const r = FIXTURES['small plot, 24 × 25 m (600 m²) on a 12 m road'];
     expect(r.avail!.highRise).toBe(true);
-    expect(shown(r)).toEqual(['A:lowBasement', 'B:lowPodium']);
+    expect(shown(r)).toEqual(['A:lowBasement', 'B:lowBlank']);
     const towers = r.considered.filter((c) => c.concept && isTower(c.concept));
     expect(towers).toHaveLength(2);
     for (const t of towers) expect(t.concept!.residential).toBeLessThan(r.concepts[1].concept.residential);
@@ -41,7 +44,7 @@ describe('different plots give different winners', () => {
   it('narrow plot (frontage under 12 m): no high-rise, both cards low-rise, towers skipped with the reason', () => {
     const r = FIXTURES['narrow plot, 11 m frontage × 40 m on a 12 m road'];
     expect(r.avail!.highRise).toBe(false);
-    expect(shown(r)).toEqual(['A:lowBasement', 'B:lowPodium']);
+    expect(shown(r)).toEqual(['A:lowBlank', 'B:lowBasement']);
     const skipped = r.considered.filter((c) => c.skipped);
     expect(skipped.map((c) => c.key)).toEqual(['towerPodium', 'towerBasement']);
     expect(skipped[0].skipped).toMatch(/Frontage 11\.0 m is under 12 m/);
@@ -56,15 +59,22 @@ describe('different plots give different winners', () => {
     expect(shown(r)).toEqual(['A:towerPodium', 'B:towerBasement']);
     expect(r.concepts[0].concept.total).toBeGreaterThan(30000);
   });
-  it('the four fixtures between them have three different winners', () => {
-    expect(new Set(Object.values(FIXTURES).map((r) => r.concepts[0].key)).size).toBe(3);
+  it('9 × 20 m on a 10 m road: only the blank-wall block fits', () => {
+    const r = FIXTURES['narrow plot, 9 × 20 m on a 10 m road'];
+    expect(shown(r)).toEqual(['A:lowBlank']);
+    expect(r.concepts[0].passes).toBe(true);
+    expect(r.noFit).toBeNull();
+    expect(r.concepts[0].fit).toContain('windows on the road and rear faces only');
+  });
+  it('the fixtures between them have four different winners', () => {
+    expect(new Set(Object.values(FIXTURES).map((r) => r.concepts[0].key)).size).toBe(4);
   });
 });
 
 describe('every candidate on every fixture', () => {
   for (const [name, r] of Object.entries(FIXTURES)) {
     it(`${name}: floor areas add up`, () => {
-      expect(r.candidates).toHaveLength(4);
+      expect(r.candidates).toHaveLength(5);
       for (const k of r.candidates) {
         const c = k.concept;
         if (!c || !c.ok) continue;
@@ -87,7 +97,7 @@ describe('every candidate on every fixture', () => {
         expect(a.residential + 0.5 >= b.residential).toBe(true);
         if (Math.abs(a.residential - b.residential) <= 0.5) expect(a.openSpace.plantedCapacity + 0.5 >= b.openSpace.plantedCapacity).toBe(true);
       }
-      expect(r.concepts.map((c) => c.concept.id)).toEqual(['A', 'B']);
+      expect(r.concepts.map((c) => c.concept.id)).toEqual(['A', 'B'].slice(0, Math.min(2, r.candidates.filter((c) => c.concept?.ok).length)));
       expect([...r.concepts, ...r.considered].map((c) => c.key).sort()).toEqual(r.candidates.map((c) => c.key).sort());
     });
   }
@@ -105,33 +115,33 @@ describe('every candidate on every fixture', () => {
 });
 
 describe('no candidate builds anything', () => {
-  const r = onRoad(9, 20, 10);
-  it('9 × 20 m on a 10 m road: one "no condo fits" state with a single reason, no cards', () => {
+  const r = onRoad(6, 20, 10);
+  it('6 × 20 m on a 10 m road: one "no condo fits" state with a single reason, no cards', () => {
     expect(r.concepts).toEqual([]);
     expect(r.noFit).not.toBeNull();
-    expect(r.noFit!.reason).toBe('Setbacks leave 85 m² to build on; the smallest usable floor is 100 m² (assumed).');
+    expect(r.noFit!.reason).toBe('Setbacks leave 68 m² to build on; the smallest usable floor is 100 m² (assumed).');
     expect(r.candidates.every((c) => !c.concept?.ok)).toBe(true);
-    expect(r.considered.map((c) => c.key).sort()).toEqual(['lowBasement', 'lowPodium', 'towerBasement', 'towerPodium']);
+    expect(r.considered.map((c) => c.key).sort()).toEqual(['lowBasement', 'lowBlank', 'lowPodium', 'towerBasement', 'towerPodium']);
   });
   it('suggests a size that would work, as an estimate, and mentions the 12 m frontage', () => {
     const sug = r.noFit!.suggestion!;
     expect(sug).toMatch(/^Rough estimate/);
-    expect(sug).toContain('about 0.9 m more frontage (9.9 m)');
-    expect(sug).toContain('about 3 m more depth (23 m)');
+    expect(sug).toContain('about 1.9 m more frontage (7.9 m)');
+    expect(sug).toContain('about 8 m more depth (28 m)');
     expect(sug).toContain('A frontage of 12 m or more also allows a high-rise.');
     // the estimate holds on this rectangle: either size builds
-    expect(onRoad(9.9, 20, 10).concepts.length).toBeGreaterThan(0);
-    expect(onRoad(9, 23, 10).concepts.length).toBeGreaterThan(0);
+    expect(onRoad(7.9, 20, 10).concepts.length).toBeGreaterThan(0);
+    expect(onRoad(6, 28, 10).concepts.length).toBeGreaterThan(0);
   });
   it('notices are not duplicated: high-rise unavailable said once, no per-concept reasons', () => {
     const warns = r.messages.filter((m) => m.level === 'warn');
     expect(warns.map((m) => m.code)).toEqual(['noHighRise']);
-    expect(warns.filter((m) => /Frontage 9\.0 m is under 12 m/i.test(m.text))).toHaveLength(1);
+    expect(warns.filter((m) => /Frontage 6\.0 m is under 12 m/i.test(m.text))).toHaveLength(1);
     expect(warns.some((m) => /setbacks leave/i.test(m.text))).toBe(false);
   });
   it('the map still has the setbacks and an envelope to draw', () => {
-    expect(r.footprints!.lowRise.area).toBeGreaterThan(0);
-    expect(r.site!.netArea).toBeCloseTo(180, 6);
+    expect(r.noFit!.footprint.area).toBeCloseTo(68, 0);
+    expect(r.site!.netArea).toBeCloseTo(120, 6);
   });
 });
 
@@ -141,5 +151,29 @@ describe('cards only for layouts with floors', () => {
       for (const c of r.concepts) expect(c.concept.ok && c.concept.floors.length > 0).toBe(true);
       expect(r.noFit === null).toBe(r.concepts.length > 0);
     }
+  });
+});
+
+describe('low-rise block with blank side walls', () => {
+  const r = FIXTURES['narrow plot, 9 × 20 m on a 10 m road'];
+  const c = r.candidates.find((k) => k.key === 'lowBlank')!;
+  it('sides keep 1 m (cl. 55), the road and rear edges their usual setbacks; roof deck at most 15 m', () => {
+    const sb = c.concept!.footprint.setbacks;
+    expect(sb.filter((x) => x.side).map((x) => [x.edge, x.setback])).toEqual([[1, 1], [3, 1]]);
+    const rear = sb.find((x) => x.edge === 2)!;
+    expect(rear.side).toBe(false);
+    expect(rear.setback).toBeGreaterThanOrEqual(2);
+    expect(c.concept!.roofDeck).toBeLessThanOrEqual(15);
+    expect(c.concept!.kind).toBe('low-rise blank');
+  });
+  it('carries the design-condition line and the usual low-rise checks', () => {
+    const line = c.checks.find((k) => k.id === 'blankSides')!;
+    expect(line.label).toBe('Side walls without windows (Reg. 55 cl. 50); 1 m clear kept (Ordinance cl. 55)');
+    expect(line.status).toBe('warn');
+    for (const id of ['far', 'lowrise', 'plantedB', 'parking', 'face', 'os2']) expect(c.checks.some((k) => k.id === id)).toBe(true);
+  });
+  it('side edges: within 45° of perpendicular to the road edge; roughly parallel edges are the rear', () => {
+    const site = buildSite([[0, 0], [20, 0], [30, 6], [20, 30], [0, 30]], [{ edge: 0, width: 10, current: 10 }], 'current');
+    expect([...sideEdges(site)].sort()).toEqual([2, 4]); // edge 1 runs at 31° to the road: treated as rear
   });
 });
