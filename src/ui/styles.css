@@ -193,7 +193,7 @@ section.results > .foot { margin: 0; }
   body { background: #fff; }
   .app { display: block; height: auto; }
   header.top { border: 0; padding: 0 0 8px; height: auto; display: block; }
-  .topnav, .hint, .labels-btn, aside.inputs, .maplibregl-ctrl-top-right, .switch, .more, .rulesview .back, section.results > .foot { display: none !important; }
+  .topnav, .hint, .labels-btn, aside.inputs, .maplibregl-ctrl-top-right, .more, .rulesview .back, section.results > .foot { display: none !important; }
   .sum { display: block; color: var(--muted); }
   .center { height: auto !important; break-inside: avoid; }
   .map { display: none !important; }

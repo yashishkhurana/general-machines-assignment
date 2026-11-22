@@ -179,7 +179,7 @@ export function App() {
         ) : (
           <>
             {badLink && <p className="banner" role="alert">This link couldn't be read, so you're seeing the example. <button type="button" className="link" onClick={() => setBadLink(false)}>Dismiss</button></p>}
-            {atExample && !badLink && <p className="intro">Example: a 2,000 m² plot on Sukhumvit Soi 39, 1,910 m² once the road is widened. A is a tower on a podium, B a low-rise block. Draw your own plot, or drag the corners.</p>}
+            {atExample && !badLink && <p className="intro">Example: a 2,000 m² plot on Sukhumvit Soi 39, 1,910 m² once the road is widened. A and B are the best two of four layouts for it{results.concepts.length === 2 ? `: ${results.concepts[0].title.toLowerCase()}, and ${results.concepts[1].title.toLowerCase()}` : ''}. Draw your own plot, or drag the corners.</p>}
             <Verdict results={results} which={which} />
             {results.concepts.length > 0 && !err && <ConceptSwitch results={results} value={which} onChange={chooseConcept} />}
             {!err && <AlsoConsidered results={results} />}
