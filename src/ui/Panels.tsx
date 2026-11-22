@@ -423,11 +423,26 @@ function limitText(c: Concept): string {
 }
 
 /** "Rules for this plot": each rule worked out on this plot's numbers (rows from core/plotRules). */
+const RULES_OPEN_KEY = 'plotRulesOpen';
+/** Open by default on desktop (setbacks appear only here); collapsed under 700 px. The user's choice is kept
+ *  for the session only. */
+function rulesOpenInitial(): boolean {
+  try { const v = sessionStorage.getItem(RULES_OPEN_KEY); if (v === '1' || v === '0') return v === '1'; } catch { /* storage blocked */ }
+  return typeof window !== 'undefined' && !!window.matchMedia?.('(min-width: 700px)').matches;
+}
+
 export function PlotRules({ rows, onHoverEdge }: { rows: RuleRow[]; onHoverEdge: (e: [Pt, Pt] | null) => void }) {
+  const [open, setOpen] = useState(rulesOpenInitial);
   if (!rows.length) return null;
   const groups = [...new Set(rows.map((r) => r.group))];
+  const onToggle = (e: React.SyntheticEvent<HTMLDetailsElement>) => {
+    const o = e.currentTarget.open;
+    if (o === open) return;
+    setOpen(o);
+    try { sessionStorage.setItem(RULES_OPEN_KEY, o ? '1' : '0'); } catch { /* storage blocked */ }
+  };
   return (
-    <details className="plotrules">
+    <details className="plotrules" open={open} onToggle={onToggle}>
       <summary>Rules for this plot <span className="muted">the working behind every number</span></summary>
       {groups.map((g) => (
         <section key={g}>
